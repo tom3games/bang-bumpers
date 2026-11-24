@@ -1,11 +1,13 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js?v=4'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=4'
-import { EngineMix } from './engine.js?v=4'
-import { makeInputs } from './cpu.js?v=4'
-import { Stage } from './stage.js?v=4'
-import { H, WORLD, BOXES, POLES, BOWL, RAMPS, SPARE_SPOTS } from './arena.js?v=4'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js?v=5'
+import { cleanName, cpuNames, NAME_MAX } from './names.js?v=5'
+import { EngineMix } from './engine.js?v=5'
+import { makeInputs } from './cpu.js?v=5'
+import { Stage } from './stage.js?v=5'
+import { loadPeople } from './people.js?v=5'
+import { loadCars } from './cars.js?v=5'
+import { H, WORLD, BOXES, POLES, BOWL, RAMPS, SPARE_SPOTS } from './arena.js?v=5'
 
 const Q = new URLSearchParams(location.search)
 const EN = Q.get('lang') === 'en'
@@ -445,6 +447,7 @@ function drawWind(k, boost, on) {
 // ------------------------------------------------------------ メインループ
 function frame(now) {
   requestAnimationFrame(frame)
+  if (window.__bbPause) { last = now; return }
   let dt = Math.min(0.05, (now - last) / 1000); last = now
   if (stage.hitStop > 0) { stage.hitStop -= dt; dt *= 0.15 }
   acc += dt * simSpeed
@@ -494,13 +497,15 @@ function frame(now) {
 
 // ------------------------------------------------------------ 読み込み
 async function boot() {
-  $('loadbar').style.width = '35%'
-  await Promise.race([Snd.prefetch(['snd/bgm_suno.mp3', 'snd/amb1.mp3']), new Promise(r => setTimeout(r, 5000))])
+  $('loadbar').style.width = '25%'
+  await Promise.all([loadPeople(), loadCars()]); stage.initPeople()
+  $('loadbar').style.width = '55%'
+  await Promise.race([Snd.prefetch(['snd/music.mp3', 'snd/amb1.mp3']), new Promise(r => setTimeout(r, 5000))])
   $('loadbar').style.width = '100%'
   await new Promise(r => setTimeout(r, 160))
   $('loading').classList.add('off'); setTimeout(() => $('loading').remove(), 600)
   $('title').hidden = false
-  window.__bb = { aimTest: () => {
+  window.__bb = { THREE, aimTest: () => {
     const t = S.teams[0], c = S.cars.find(q => q.id === t.car); if (!c || curRole() !== 'shoot') return { err: 'not shooter' }
     S.bullets.length = 0; t.cd = 0; for (const w of t.ws) { w.heat = 0; w.reloadT = 0; w.mag = 30; w.overT = 0 }
     const P = stage.aimPoint(S, c); aimRay = P; K.mouseDown = true; K.noAssist = true

@@ -56,3 +56,6 @@
 - snd/spring3.mp3: 100 CC0 SFX / rubberduck / CC0
 - snd/eng_idle.wav・eng_mid.wav・eng_high.wav: racing car engine sound loops（loop_0・loop_3_0・loop_5_0）/ domasx2 / CC0（回転数で重ねて混ぜる）
 - snd/music.mp3: 音楽: Suno で作成（作者のアカウント）。つなぎ目を重ねたループ版
+- models/car_lite.glb（ビュンの車体）: "Car Concept" by Eric Chadwick / Darmstadt Graphics Group（Khronos glTF Sample Assets）CC BY 4.0。WRECK ISLE と同じ物（ロゴを外し面を減らした軽量版）。塗装色・番号・外れる部品・車輪の動きは本ゲームで加工
+- js/btrcar.js（バランス・ドスンの曲面の車体）: 作者の別作品 BREAK THE ROUTE の車の作りを WRECK ISLE 経由で流用（自作）
+- assets/chars/（射手と歩く人）: Quaternius「Universal Base Characters」の素体と「Universal Animation Library」「Universal Animation Library 2」（Standard 版）/ Quaternius / CC0。服の色・ヘルメット・銃の構えは本ゲームで加工

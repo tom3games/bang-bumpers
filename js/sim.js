@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=4'
+import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=5'
 
 export const DT = 1 / 60
 export const G = 24
@@ -24,9 +24,9 @@ export const WEAPONS = {
 export const WEAPON_IDS = ['paint', 'rocket', 'confetti', 'spring', 'cork']
 // 車（運転が1つ選ぶ）。dur は壊れにくさ（ダメージを割る）。mass は体当たりの重さ
 export const CAR_TYPES = [
-  { id: 'std', name: 'バランス', note: 'どれも平均点。迷ったらこれ', muzY: 1.9, tz: -0.3, thrUp: 2.4, thrDown: 1.9, brake: 13, roll: 0.8, yawTau: 0.14, maxF: 21, acc: 8.0, dur: 1.0, mass: 1.0, steer: 1.0, grip: 9.0, boostK: 1.0, scale: 1.0, stat: [3, 3, 3, 3] },
-  { id: 'fast', name: 'ビュン', note: '速くて軽い。壊れやすい', muzY: 1.65, tz: -0.7, thrUp: 3.4, thrDown: 2.5, brake: 12, roll: 0.65, yawTau: 0.11, maxF: 25.5, acc: 11.5, dur: 0.7, mass: 0.8, steer: 0.9, grip: 8.0, boostK: 1.0, scale: 0.96, stat: [5, 1, 3, 1] },
-  { id: 'heavy', name: 'ドスン', note: '遅いけど硬くて体当たりが強い', muzY: 2.47, tz: -0.02, thrUp: 1.5, thrDown: 1.2, brake: 9, roll: 0.5, yawTau: 0.26, maxF: 17.5, acc: 5.6, dur: 1.55, mass: 1.8, steer: 0.8, grip: 9.5, boostK: 0.8, scale: 1.1, stat: [1, 5, 2, 5] },
+  { id: 'std', name: 'バランス', note: 'どれも平均点。迷ったらこれ', muzY: 1.99, tz: -0.3, thrUp: 2.4, thrDown: 1.9, brake: 13, roll: 0.8, yawTau: 0.14, maxF: 21, acc: 8.0, dur: 1.0, mass: 1.0, steer: 1.0, grip: 9.0, boostK: 1.0, scale: 1.0, stat: [3, 3, 3, 3] },
+  { id: 'fast', name: 'ビュン', note: '速くて軽い。壊れやすい', muzY: 1.65, tz: -0.62, thrUp: 3.4, thrDown: 2.5, brake: 12, roll: 0.65, yawTau: 0.11, maxF: 25.5, acc: 11.5, dur: 0.7, mass: 0.8, steer: 0.9, grip: 8.0, boostK: 1.0, scale: 0.96, stat: [5, 1, 3, 1] },
+  { id: 'heavy', name: 'ドスン', note: '遅いけど硬くて体当たりが強い', muzY: 2.25, tz: -1.62, thrUp: 1.5, thrDown: 1.2, brake: 9, roll: 0.5, yawTau: 0.26, maxF: 17.5, acc: 5.6, dur: 1.55, mass: 1.8, steer: 0.8, grip: 9.5, boostK: 0.8, scale: 1.1, stat: [1, 5, 2, 5] },
 ]
 // アイテム。role D=運転だけが使う・G=射手だけが使う
 export const ITEMS = {

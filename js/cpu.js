@@ -1,7 +1,7 @@
 // CPU の頭。運転役・射手役・歩きを別々に作り、makeInputs で人の入力と混ぜて チームごとの入力 にする。
 // 状態(S)は読むだけ。サーバーに移しても同じ関数がそのまま動く。
-import { H, WORLD, pushOutCircle, lineClear, clamp } from './arena.js?v=4'
-import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=4'
+import { H, WORLD, pushOutCircle, lineClear, clamp } from './arena.js?v=5'
+import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=5'
 
 const MEM = new WeakMap()
 const mem = t => { let m = MEM.get(t); if (!m) { m = { stuckT: 0, revT: 0, lx: 0, lz: 0, lt: 0, tgt: -1, tgtT: 0, gtgt: -1, gT: 0, noise: 0, burst: 0, rest: 0.5, aim: null, side: 1, seed: t.id * 7.13 + 1, walkStuck: 0, wlx: 0, wlz: 0, wt: 0, wside: 1, dropT: 3 + t.id }; MEM.set(t, m) } return m }

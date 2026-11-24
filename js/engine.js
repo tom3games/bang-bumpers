@@ -46,8 +46,11 @@ export class EngineMix {
     // 鳴らすのは 自分 + 近い数台
     const want = []
     if (me && me.alive) want.push([me, 0])
-    const near = S.cars.filter(c => c !== me && c.alive && c.team >= 0).map(c => [c, me ? Math.hypot(c.x - me.x, c.z - me.z) : 999]).filter(a => a[1] < 70).sort((a, b) => a[1] - b[1]).slice(0, this.max - 1)
+    const all = S.cars.filter(c => c !== me && c.alive && c.team >= 0).map(c => [c, me ? Math.hypot(c.x - me.x, c.z - me.z) : 999]).filter(a => a[1] < 75).sort((a, b) => a[1] - b[1])
+    // 入れ替わりで音が作り直されないよう、鳴らしている車は少し順位が落ちても残す
+    const near = all.slice(0, this.max - 1); const keep = all.slice(0, this.max + 1).filter(a => this.voices.has(a[0].id) && !near.includes(a))
     for (const a of near) want.push(a)
+    for (const a of keep) if (want.length < this.max) want.push(a)
     const ids = new Set(want.map(w => w[0].id))
     for (const [id, v] of this.voices) if (!ids.has(id)) { v.stop(); this.voices.delete(id) }
     const sy = Math.sin(camYaw), cy = Math.cos(camYaw)

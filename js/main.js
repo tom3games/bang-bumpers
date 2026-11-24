@@ -194,9 +194,9 @@ function buildPrep() {
 function comboHint() {
   const el = $('pcombo'); if (!el) return
   if (S.teams[0].driver === 0) { const c = CAR_TYPES[selCar]; el.textContent = L(['', '足は速いが、当たり負けしやすい', '遅いが、体当たりで押し勝てる', '小回りで、すり抜けて戦える'][selCar] || L('どこにでも合う標準の車', ''), ''); if (!selCar) el.textContent = L('クセのない標準の車', 'A standard car'); void c; return }
-  const [a, b] = selWeapons.map(id => WEAPONS[id].stat[2]), w = selWeapons
-  el.textContent = L(Math.abs(a - b) >= 2 ? `${a > b ? '' : ''}近くと遠くをカバーできる組み合わせ` : (a + b >= 8 ? '遠くの敵を狙う組み合わせ' : a + b <= 4 ? '近づいてきた敵に強い組み合わせ' : '中くらいの距離で戦う組み合わせ'), 'Combo')
-  void w
+  const ws = selWeapons.map(id => WEAPONS[id].stat), ra = ws[0][2], rb = ws[1][2], pw = ws[0][0] + ws[1][0], rt = ws[0][1] + ws[1][1]
+  const txt = Math.abs(ra - rb) >= 2 ? '近くと遠くをカバーできる' : ra + rb >= 8 ? '遠くから削る組み合わせ' : ra + rb <= 4 ? '近づいた敵に強い組み合わせ' : rt >= 7 ? '連射でじわじわ削る' : pw >= 8 ? '一発の重さで勝負する' : '中くらいの距離で戦う'
+  el.textContent = L(txt, 'Loadout')
 }
 function markPrep() {
   const drive = S.teams[0].driver === 0
@@ -256,7 +256,7 @@ function showResult(rank) {
   $('rkN').textContent = rank; $('rkU').textContent = L('位', rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th')
   const V = [['最後まで走りきった', 'Last one rolling'], ['あと一歩で頂点だった', 'One hit from the top'], ['ボロボロだけど生きていた', 'Dented but alive'], ['早めに放り出された', 'Thrown out early'], ['最初の被害者になった', 'First one to go']][rank - 1]
   { const sc = id => S.teams[id].stock * 2 + S.teams[id].kills, lead = S.ranking.length ? S.ranking[0] : -1
-    if (rank === 2 && lead >= 0 && sc(0) < sc(lead) - 1) V[0] = 'しぶとく最後まで残った', V[1] = 'Hung on to the end' }
+    if (rank === 2 && lead >= 0 && (sc(0) < sc(lead) - 1 || S.teams[0].kills === 0)) V[0] = 'しぶとく最後まで残った', V[1] = 'Hung on to the end' }
   $('rkV').textContent = L(...V)
   const order = S.ranking.length ? S.ranking : [...S.teams].sort((a, b) => (b.out ? -1000 + b.outT : 1000 + b.stock * 100 + b.kills * 3) - (a.out ? -1000 + a.outT : 1000 + a.stock * 100 + a.kills * 3)).map(x => x.id)
   $('rkList').innerHTML = order.map((id, i) => { const tm = S.teams[id]; return `<li class="${id === 0 ? 'me' : ''}" style="--tc:${hex(TEAM_COLORS[id])}"><b>${i + 1}</b><i></i><span>${tname(id)}${id === 0 ? L('（あなた）', ' (you)') : ''}</span><em>${tm.kills} ${L('撃破', 'KO')}</em></li>` }).join('')

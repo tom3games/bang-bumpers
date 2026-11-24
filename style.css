@@ -280,3 +280,5 @@ body.touch #wslots{flex-direction:column;gap:4px}body.touch .ws{min-width:108px}
 #board li{grid-template-columns:6px auto 1fr auto}
 #board li em{font-style:normal;font:700 10px var(--jp);color:#d8d3c4;white-space:nowrap;max-width:44px;overflow:hidden}
 #board li .st{justify-self:end}
+body.touch #wslots{bottom:calc(var(--sb) + var(--inapp) + 160px)}
+@media (max-width:600px){#pcards.guns .card:last-child:nth-child(odd){grid-column:1/-1}}

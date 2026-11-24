@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp } from './arena.js'
+import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js'
 
 export const DT = 1 / 60
 export const G = 24
@@ -141,6 +141,7 @@ function teamControl(S, t, inp, dt, live) {
     else t.swapT = Math.max(0, t.swapT - dt * 2)
   }
   if (!live) return
+  if (inp.unstick) { const p = freeSpot(c.x + Math.sin(c.yaw) * 6, c.z + Math.cos(c.yaw) * 6, 3.4); if (Math.hypot(p.x - c.x, p.z - c.z) < 30) { c.x = p.x; c.z = p.z; c.y = H(p.x, p.z); c.vx = c.vz = 0; c.invT = Math.max(c.invT, 0.6); ev(S, { k: 'unstick', x: c.x, y: c.y, z: c.z }) } }
   c.gunYaw = inp.aim ?? c.gunYaw
   t.cd -= dt; c.invT -= dt; c.turboT = Math.max(0, c.turboT - dt); c.spearT = Math.max(0, c.spearT - dt); t.ricT = Math.max(0, t.ricT - dt)
   // 銃の持ち替え
@@ -356,7 +357,7 @@ function stepBody(S, c, dt, inp, boosting) {
 const HOW_K = { bullet: 0.46, ram: 0.56, rocket: 0.9, mine: 0.9 }
 export function hurt(S, c, dmg, by, x, z, how) {
   if (!c.alive || dmg <= 0 || c.invT > 0 || S.phase !== 'play' || S.over) return 0
-  dmg *= (HOW_K[how] ?? 0.6) / (CAR_TYPES[c.type] || CAR_TYPES[0]).dur
+  dmg *= (HOW_K[how] ?? 0.6) / (CAR_TYPES[c.type] || CAR_TYPES[0]).dur * (1 + clamp((S.tMatch - 120) / 240, 0, 0.6))
   c.hp -= dmg; c.dmgFlash = 0.25
   if (by !== null && by !== undefined && by !== c.team) c.lastHit = { team: by, t: S.t }
   return dmg

@@ -19,7 +19,7 @@ const Snd = {
     try {
       const c = this.ctx = new AC()
       this.master = c.createGain(); this.master.gain.value = this.muted ? 0 : 0.9
-      this.an = c.createAnalyser(); this.an.fftSize = 2048; this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 22000; this.master.connect(this.lp); this.lp.connect(this.an); this.an.connect(c.destination) // 全体の音をこもらせる口（muffle）
+      this.an = c.createAnalyser(); this.an.fftSize = 2048; this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 22000; const cmp = c.createDynamicsCompressor(); cmp.threshold.value = -14; cmp.knee.value = 8; cmp.ratio.value = 6; cmp.attack.value = 0.004; cmp.release.value = 0.22; this.master.connect(cmp); cmp.connect(this.lp); this.lp.connect(this.an); this.an.connect(c.destination) // 全体の音をこもらせる口（muffle）
       this.sfxBus = c.createGain(); this.sfxBus.connect(this.master)
       this.bed = c.createGain(); this.bed.gain.value = 1; this.bed.connect(this.master)   // 環境音と BGM（duck で下げる）
       // こもらせる道（壁の向こう・ほかの音にかき消された時）

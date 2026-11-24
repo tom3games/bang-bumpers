@@ -46,8 +46,9 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
   const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), sp = c.vx * fx + c.vz * fz
   // 詰まり検知
   m.lt += dt
-  if (m.lt > 1.2) { const moved = Math.hypot(c.x - m.lx, c.z - m.lz); if (moved < 0.9 && !c.air && m.revT <= 0 && S.phase === 'play') { m.revT = 1.1; m.side = -m.side; m.stuckN = (S.t - (m.stuckAt || -99) < 9 ? (m.stuckN || 0) + 1 : 1); m.stuckAt = S.t; if (m.stuckN >= 2) { let bestA = 0, bestD = -1; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283, fd = freeDist(S, c, a, 40); if (fd > bestD + S.rng() * 3) { bestD = fd; bestA = a } } m.wander = { x: c.x + Math.sin(bestA) * 35, z: c.z + Math.cos(bestA) * 35, until: S.t + 6 } } } m.lx = c.x; m.lz = c.z; m.lt = 0 }
-  if (m.revT > 0) { m.revT -= dt; return { throttle: -1, steer: m.side * 0.9, boost: false } }
+  if (m.lt > 1.2) { const moved = Math.hypot(c.x - m.lx, c.z - m.lz); if (moved < 0.9 && !c.air && m.revT <= 0 && S.phase === 'play') { m.revT = 1.1; m.side = -m.side; m.stuckN = (S.t - (m.stuckAt || -99) < 9 ? (m.stuckN || 0) + 1 : 1); m.stuckAt = S.t; if (m.stuckN >= 3) m.unstick = true
+      if (m.stuckN >= 2) { let bestA = 0, bestD = -1; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283, fd = freeDist(S, c, a, 40); if (fd > bestD + S.rng() * 3) { bestD = fd; bestA = a } } m.wander = { x: c.x + Math.sin(bestA) * 35, z: c.z + Math.cos(bestA) * 35, until: S.t + 6 } } } m.lx = c.x; m.lz = c.z; m.lt = 0 }
+  if (m.revT > 0) { m.revT -= dt; const un = !!m.unstick; m.unstick = false; return { throttle: -1, steer: m.side * 0.9, boost: false, unstick: un } }
   const tg = pickTarget(S, t, c, m, dt, humanGunAim)
   let gx = 0, gz = 0, mode = 'idle', want = 1, boost = false
   const wandering = m.wander && S.t < m.wander.until
@@ -124,7 +125,8 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
     else if ((it === 'oil' || it === 'mine') && behind) useD = true
     m.useT = useD ? 4 : 0.8
   }
-  return { throttle: thr, steer, boost: boost && Math.abs(diff) < 0.35 && c.boost > 0.5 && cur > 12, useD }
+  const unstick = !!m.unstick; m.unstick = false
+  return { throttle: thr, steer, boost: boost && Math.abs(diff) < 0.35 && c.boost > 0.5 && cur > 12, useD, unstick }
 }
 
 // 射手: 見える敵を選び、先読みして追う。人の速さの遅れとぶれを入れる。距離で銃を持ち替え、役のアイテムも使う
@@ -233,7 +235,7 @@ export function makeInputs(S, dt, human) {
     const humanDrives = isH && t.driver === 0, humanGuns = isH && t.driver === 1
     const dr = humanDrives ? human.drive : cpuDrive(S, t, c, dt, humanGuns ? c.gunYaw : null)
     const gn = humanGuns ? human.gun : cpuGun(S, t, c, dt)
-    Object.assign(o, { throttle: dr.throttle, steer: dr.steer, boost: dr.boost, hb: !!dr.hb, aim: gn.aim, fire: gn.fire, reload: gn.reload, assist: gn.assist, wsel: gn.wsel, wswap: !!(humanGuns && human.wswap), useD: humanDrives ? !!human.use : !!dr.useD, useG: humanGuns ? !!human.use : !!gn.useG, swap: !!(isH && human.swap) })
+    Object.assign(o, { throttle: dr.throttle, steer: dr.steer, boost: dr.boost, hb: !!dr.hb, unstick: !!dr.unstick, aim: gn.aim, fire: gn.fire, reload: gn.reload, assist: gn.assist, wsel: gn.wsel, wswap: !!(humanGuns && human.wswap), useD: humanDrives ? !!human.use : !!dr.useD, useG: humanGuns ? !!human.use : !!gn.useG, swap: !!(isH && human.swap) })
     out[t.id] = o
   }
   return out

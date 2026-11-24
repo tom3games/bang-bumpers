@@ -219,7 +219,7 @@ export function buildCar(color, num = 1, type = 0) {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(0.34, 22), M.hatch); disc.rotation.x = -Math.PI / 2; disc.position.set(0, 0.006, 0); turret.add(disc)
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.345, 0.018, 8, 26), M.rubber); ring.rotation.x = Math.PI / 2; ring.position.y = 0.01; turret.add(ring)
   } else { // 荷台: ロールバー（運転台の後ろの門型）
-    const hoopG = new THREE.TorusGeometry(0.62, 0.028, 8, 20, Math.PI), hoop = new THREE.Mesh(hoopG, M.black); hoop.position.set(0, -0.35, -0.7); hoop.scale.set(1, 0.95, 1); hoop.castShadow = true; turret.add(hoop)
+    const hoopG = new THREE.TorusGeometry(0.62, 0.024, 8, 20, Math.PI), hoop = new THREE.Mesh(hoopG, M.black); hoop.position.set(0, -0.45, 0.5); hoop.scale.set(1, 0.95, 1); hoop.castShadow = true; turret.add(hoop)
   }
   const gun = buildGun(); turret.add(gun.g)
   // 射手（人）: 腰から上が出る。両手は銃の取っ手へ

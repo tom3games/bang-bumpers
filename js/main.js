@@ -1,11 +1,11 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js?v=2'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=2'
-import { EngineMix } from './engine.js?v=2'
-import { makeInputs } from './cpu.js?v=2'
-import { Stage } from './stage.js?v=2'
-import { H, HALF, WORLD, BOXES, POLES, BOWL, DECK, RAMPS, SPARE_SPOTS } from './arena.js?v=2'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js?v=3'
+import { cleanName, cpuNames, NAME_MAX } from './names.js?v=3'
+import { EngineMix } from './engine.js?v=3'
+import { makeInputs } from './cpu.js?v=3'
+import { Stage } from './stage.js?v=3'
+import { H, HALF, WORLD, BOXES, POLES, BOWL, DECK, RAMPS, SPARE_SPOTS } from './arena.js?v=3'
 
 const Q = new URLSearchParams(location.search)
 const EN = Q.get('lang') === 'en'
@@ -266,7 +266,7 @@ function showResult(rank) {
   const acc = st.shots ? Math.round(st.hits / st.shots * 100) : 0
   $('rkSt').textContent = L(`撃った ${st.shots} 発・当たった ${st.hits} 発（${acc}%）・体当たり ${st.rams} 回・拾った物 ${st.pick} 個`, `Shots ${st.shots} · hits ${st.hits} (${acc}%) · rams ${st.rams} · pickups ${st.pick}`)
   $('result').classList.toggle('win', rank === 1)
-  $('result').hidden = false; $('hud').hidden = true; $('prep').hidden = true; phase = 'result'
+  $('result').hidden = false; $('hud').hidden = true; $('prep').hidden = true; $('flashfx').style.opacity = 0; phase = 'result'
   playSnd(rank <= 2 ? 'win' : 'lose', { vol: 0.9 }); Snd.duck(0.3, 3); engine.clear(); bgm(0.26)
   document.exitPointerLock?.()
   window.__bbDone = { tMatch: S.tMatch, winner: S.winner, wrecks: S.wrecks, teams: S.teams.map(t => ({ kills: t.kills })), rank }
@@ -303,6 +303,7 @@ function onEvents() {
       case 'swap': say(L(S.teams[0].driver === 0 ? '運転になった' : '射手になった', S.teams[0].driver === 0 ? 'You drive now' : 'You shoot now'), true, 1200); if (S.teams[0].driver === 1) { const c = S.cars.find(q => q.id === S.teams[0].car); if (c) aimYaw = c.gunYaw } break
       case 'pickup': if (e.team === 0) say(L(ITEM_NAMES[e.type], e.type.toUpperCase()), true, 900, ITEMS[e.type] && ITEMS[e.type].role === 'D' ? L('運転のアイテム', 'Driver item') : ITEMS[e.type] && ITEMS[e.type].role === 'G' ? L('射手のアイテム', 'Shooter item') : ''); break
       case 'repair': if (e.team === 0) say(L('修理', 'REPAIR'), true, 900); break
+      case 'flash': { const mc = myTeam() && myTeam().car >= 0 ? S.cars.find(q => q.id === myTeam().car) : null; if (mc && mc.flashT > 0.3) { Snd.muffle(Math.min(2.2, mc.flashT * 0.8)); playSnd('bell', { vol: 0.16, rate: 3.2 }) } break }
       case 'overheat': if (e.team === 0) say(L('熱い！', 'OVERHEAT'), true, 900); break
       case 'board': if (e.team === 0) { say(L('復活', 'BACK IN'), true, 1000); const c = S.cars.find(q => q.id === e.id); if (c) { aimYaw = c.yaw; snapCam = true } } break
     }
@@ -473,6 +474,7 @@ function frame(now) {
     const ref = c || (t && t.p[0])
     if (ref) drawRadar(ref.x, ref.z, c ? stage.camYaw : stage.camYaw)
     updateMarks()
+    { const fx = $('flashfx'), a = c && c.flashT > 0 ? Math.min(0.82, Math.min(1, c.flashT / 0.9) * 0.82 * Math.min(1, c.flashT / Math.max(0.5, c.flashDur * 0.6))) : 0; fx.style.opacity = a.toFixed(3) }
     engine.update(S, dt, c, stage.camYaw, muted, S.phase === 'play' && !S.over)
     { const sp = c ? Math.hypot(c.vx, c.vz) : 0
       if (c && c.slip > 4.2 && !c.air && sp > 6 && performance.now() - (window.__scrub || 0) > 380) { window.__scrub = performance.now(); playSnd('roll', { vol: Math.min(0.5, c.slip * 0.06), rate: 1.7 + Math.random() * 0.3 }) } }

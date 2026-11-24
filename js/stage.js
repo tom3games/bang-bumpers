@@ -1,14 +1,14 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 import * as THREE from 'three'
-import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS, POLES, BOXES, H, bowlH, solidAtPoint, SPARE_SPOTS } from './arena.js?v=2'
-import * as TX from './textures.js?v=2'
-import { buildCar, buildWalker, rbox, Baker } from './models.js?v=2'
-import { Particles, Splats, Debris, Rings } from './fx.js?v=2'
+import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS, POLES, BOXES, H, bowlH, solidAtPoint, SPARE_SPOTS } from './arena.js?v=3'
+import * as TX from './textures.js?v=3'
+import { buildCar, buildWalker, rbox, Baker } from './models.js?v=3'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=3'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES } from './sim.js?v=2'
+import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R } from './sim.js?v=3'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
@@ -264,7 +264,7 @@ export class Stage {
     const og = new THREE.CircleGeometry(1, 28); og.rotateX(-Math.PI / 2)
     for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(og, new THREE.MeshStandardMaterial({ color: 0x0b0b0e, roughness: 0.05, metalness: 0.9, transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: -3 })); m.visible = false; m.receiveShadow = true; S.add(m); this.oilMs.push(m) }
     this.pickMs = []
-    const icons = { turbo: ['#f08a1e', 'bolt'], spear: ['#f08a1e', 'spear'], oil: ['#f08a1e', 'oil'], mine: ['#f08a1e', 'mine'], repair: ['#2f9e57', 'plus'], grenade: ['#1fa6cf', 'gren'], smoke: ['#1fa6cf', 'cloud'], ricochet: ['#1fa6cf', 'zig'], turret: ['#1fa6cf', 'tur'] }
+    const icons = { turbo: ['#f08a1e', 'bolt'], spear: ['#f08a1e', 'spear'], oil: ['#f08a1e', 'oil'], mine: ['#f08a1e', 'mine'], repair: ['#2f9e57', 'plus'], grenade: ['#1fa6cf', 'gren'], flash: ['#1fa6cf', 'flash'], smoke: ['#1fa6cf', 'cloud'], ricochet: ['#1fa6cf', 'zig'], turret: ['#1fa6cf', 'tur'] }
     this.pickIcons = {}
     for (const k in icons) this.pickIcons[k] = this.iconTex(icons[k][0], icons[k][1])
     for (let i = 0; i < 32; i++) {
@@ -289,6 +289,7 @@ export class Stage {
     else if (kind === 'plus') { g.fillRect(54, 26, 20, 76); g.fillRect(26, 54, 76, 20) }
     else if (kind === 'bolt') { g.beginPath(); g.moveTo(74, 16); g.lineTo(38, 70); g.lineTo(60, 70); g.lineTo(50, 112); g.lineTo(92, 54); g.lineTo(68, 54); g.closePath(); g.fill() }
     else if (kind === 'spear') { g.beginPath(); g.moveTo(104, 24); g.lineTo(78, 30); g.lineTo(98, 50); g.closePath(); g.fill(); g.beginPath(); g.moveTo(24, 104); g.lineTo(92, 36); g.lineWidth = 9; g.stroke() }
+    else if (kind === 'flash') { g.beginPath(); for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283, r = i % 2 ? 22 : 40; g.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r) } g.closePath(); g.fill() }
     else if (kind === 'gren') { g.beginPath(); g.arc(64, 74, 28, 0, 7); g.fill(); g.fillRect(56, 30, 16, 16); g.beginPath(); g.moveTo(72, 34); g.lineTo(96, 24); g.stroke() }
     else if (kind === 'cloud') { for (const [x, y, r] of [[46, 72, 20], [66, 60, 24], [86, 74, 18], [64, 80, 22]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill() } }
     else if (kind === 'zig') { g.beginPath(); g.moveTo(26, 40); g.lineTo(52, 90); g.lineTo(76, 36); g.lineTo(102, 88); g.stroke() }
@@ -435,7 +436,8 @@ export class Stage {
       } else if (b.type === 'grenade') {
         const g = this.grenades[ng++]; if (!g) continue
         g.visible = true; g.position.set(x, y, zz); g.rotation.x += 0.2; g.rotation.z += 0.15
-        if (Math.floor(this.time * 8) % 2 === 0) g.children[1].material.color.setHex(0xff3a2a); else g.children[1].material.color.setHex(0x331010)
+        g.children[0].material.color.setHex(b.flash ? 0xcfe8f2 : 0x4a5a36)
+        if (Math.floor(this.time * 8) % 2 === 0) g.children[1].material.color.setHex(b.flash ? 0xffffff : 0xff3a2a); else g.children[1].material.color.setHex(0x331010)
       } else if (b.type === 'confetti') {
         if (nc >= 200) continue
         q.setFromEuler(new THREE.Euler(this.time * 9 + b.hue, this.time * 7 + b.id, 0)); s.set(1, 1, 1)
@@ -539,6 +541,7 @@ export class Stage {
       case 'swap': this.snd('switch', { vol: 0.6 }); break
       case 'spare': for (let i = 0; i < 14; i++) sm.emit(e.x, e.y + 0.5, e.z, (rnd() - 0.5) * 6, 1 + rnd() * 2, (rnd() - 0.5) * 6, 1.0, 0.8, 2.6, 0xfff0c0, 0xcbc4b6, 0.5, 0, 2); this.rings.ring(e.x, e.y, e.z, 3.5, 0xffd23a, 0.6); break
       case 'vanish': for (let i = 0; i < 8; i++) sm.emit(e.x, e.y + 0.6, e.z, (rnd() - 0.5) * 3, 1 + rnd(), (rnd() - 0.5) * 3, 1.2, 1.2, 3.5, 0x4a4845, 0x4a4845, 0.5, 0, 1); break
+      case 'flash': this.rings.flash(e.x, e.y, e.z, 12, 0xffffff, 0.35); this.rings.ring(e.x, e.y, e.z, FLASH_R * 0.5, 0xdff4ff, 0.6, 0.6); for (let i = 0; i < 20; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 22, rnd() * 10, (rnd() - 0.5) * 22, 0.8, 0.5, 0.1, 0xffffff, 0xcfeaff, 1, 8, 0.6); this.snd('bell', { vol: this.vol(e.x, e.z, 0.32, 40), rate: 2.4 }); this.snd('boom5', { vol: this.vol(e.x, e.z, 0.35, 40), rate: 1.7 }); break
       case 'throw': this.snd('whoosh', { vol: this.vol(e.x, e.z, 0.5, 26), rate: 1.7 }); break
       case 'bounce': this.snd('spring', { vol: this.vol(e.x, e.z, 0.4, 26), rate: 1.3 + rnd() * 0.5 }); for (let i = 0; i < 4; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 5, rnd() * 4, (rnd() - 0.5) * 5, 0.3, 0.3, 0.05, 0xfff0b0, 0xffb040, 1, 14, 0.4); break
       case 'smoke': this.snd('splash', { vol: this.vol(e.x, e.z, 0.7, 30), rate: 0.7 }); break
@@ -640,6 +643,6 @@ export class Stage {
 }
 const _scorch = new THREE.Color(0x1c1a18), _white = new THREE.Color(0xffffff)
 const CONF = [0xff4a8a, 0xffd23a, 0x4ad0ff, 0xa0ff5a, 0xff7a2a, 0xffffff, 0xb07aff]
-const PICKC = { turbo: 0xf08a1e, spear: 0xf08a1e, oil: 0xf08a1e, mine: 0xf08a1e, repair: 0x2f9e57, grenade: 0x1fa6cf, smoke: 0x1fa6cf, ricochet: 0x1fa6cf, turret: 0x1fa6cf }
-const ROLE_G = new Set(['grenade', 'smoke', 'ricochet', 'turret'])
+const PICKC = { turbo: 0xf08a1e, spear: 0xf08a1e, oil: 0xf08a1e, mine: 0xf08a1e, repair: 0x2f9e57, grenade: 0x1fa6cf, flash: 0x1fa6cf, smoke: 0x1fa6cf, ricochet: 0x1fa6cf, turret: 0x1fa6cf }
+const ROLE_G = new Set(['grenade', 'flash', 'smoke', 'ricochet', 'turret'])
 const BOXG = new THREE.BoxGeometry(1.15, 1.15, 1.15), SPHG = new THREE.SphereGeometry(0.78, 18, 14)

@@ -1,0 +1,44 @@
+{
+ "marks": {
+  "s1": 0,
+  "s2": 5.13,
+  "s3": 9.2,
+  "s4": 11.67,
+  "s5": 16,
+  "s6": 18.73,
+  "s7": 22.27
+ },
+ "info": {
+  "sec": 24.93,
+  "MB": 16.4,
+  "streams": [
+   "video:h264 1080x1920 yuv420p 30/1",
+   "audio:aac"
+  ],
+  "lufs": -16.6,
+  "peak": -2
+ },
+ "errs": [
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "frames": "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501",
+ "stills": [
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-0-0.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-1-2.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-2-3.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-3-5.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-4-6.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-5-8.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-6-9.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-7-11.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-8-12.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-9-14.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-10-15.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-11-17.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-12-18.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-13-20.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-14-21.5s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-15-23.0s.jpg",
+  "/var/folders/5r/_88k6vl53rvcxfpx5pktn8mr0000gn/T/bang-bumpers-frames-1795539061501/still-16-24.5s.jpg"
+ ]
+}

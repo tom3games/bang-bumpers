@@ -1,6 +1,6 @@
 // 車と人の見た目。おもちゃのバンパーカー。曲面の車体・太いタイヤ・屋根の射手台・旗
 import * as THREE from 'three'
-import { numberTexture, grimeTexture } from './textures.js?v=2'
+import { numberTexture, grimeTexture } from './textures.js?v=3'
 import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js'
 
 const cache = {}

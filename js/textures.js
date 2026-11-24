@@ -1,6 +1,6 @@
 // 絵はすべてその場で描く（画像ファイルなし）。廃工場のコンクリート・壁・木箱・鉄板
 import * as THREE from 'three'
-import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS } from './arena.js?v=2'
+import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS } from './arena.js?v=3'
 
 function rnd(seed) { let a = seed; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')] }

@@ -1,7 +1,7 @@
 // CPU の頭。運転役・射手役・歩きを別々に作り、makeInputs で人の入力と混ぜて チームごとの入力 にする。
 // 状態(S)は読むだけ。サーバーに移しても同じ関数がそのまま動く。
-import { H, WORLD, HALF, DOORS, pushOutCircle, lineClear, clamp } from './arena.js?v=2'
-import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=2'
+import { H, WORLD, HALF, DOORS, pushOutCircle, lineClear, clamp } from './arena.js?v=3'
+import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=3'
 
 const MEM = new WeakMap()
 const mem = t => { let m = MEM.get(t); if (!m) { m = { stuckT: 0, revT: 0, lx: 0, lz: 0, lt: 0, tgt: -1, tgtT: 0, gtgt: -1, gT: 0, noise: 0, burst: 0, rest: 0.5, aim: null, side: 1, seed: t.id * 7.13 + 1, walkStuck: 0, wlx: 0, wlz: 0, wt: 0, wside: 1, dropT: 3 + t.id }; MEM.set(t, m) } return m }
@@ -42,6 +42,7 @@ function pickTarget(S, t, c, m, dt, humanGunAim) {
 }
 
 export function cpuDrive(S, t, c, dt, humanGunAim = null) {
+  if (c.flashT > 0.05) return { throttle: 0.75, steer: 0, boost: false }   // 目がくらんでいる間は、ただまっすぐ走る
   const m = mem(t), style = humanGunAim != null ? 'flank' : STYLE[t.id]
   const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), sp = c.vx * fx + c.vz * fz
   // 詰まり検知
@@ -174,7 +175,8 @@ export function cpuGun(S, t, c, dt) {
     else { const p = S.teams[g.t].p[g.i]; if (p.state === 'walk') { dist = Math.hypot(p.x - c.x, p.z - c.z); tx = p.x + p.vx * 0.1; tz = p.z + p.vz * 0.1 } }
   }
   m.noise += (Math.sin(S.t * 2.1 + m.seed) * 0.5 + (S.rng() - 0.5) * 2 - m.noise) * Math.min(1, 3 * dt)
-  const want = tx != null ? Math.atan2(tx - c.x, tz - c.z) + m.noise * (0.025 + dist * 0.0012) : c.yaw + Math.sin(S.t * 0.7 + m.seed) * 1.4
+  const blind = c.flashT > 0.05 ? (S.rng() - 0.5) * 0.9 : 0
+  const want = tx != null ? Math.atan2(tx - c.x, tz - c.z) + blind + m.noise * (0.025 + dist * 0.0012) : c.yaw + Math.sin(S.t * 0.7 + m.seed) * 1.4
   const dv = angDiff(want, c.gunYaw), rate = 2.8
   const aim = c.gunYaw + clamp(dv, -rate * dt, rate * dt)
   const wsel = tx != null ? chooseWeapon(t, dist) : t.wSel
@@ -194,6 +196,7 @@ export function cpuGun(S, t, c, dt) {
   if (t.iG && m.dropT <= 0) {
     const it = t.iG.type, en = enemiesOf(S, t.id), near = en.reduce((d, e) => Math.min(d, Math.hypot(e.x - c.x, e.z - c.z)), 999)
     if (it === 'grenade' && tx != null && dist > 8 && dist < 32) useG = true
+    else if (it === 'flash' && tx != null && dist > 7 && dist < 24) useG = true
     else if (it === 'smoke' && (c.hp < 45 && near < 38)) useG = true
     else if (it === 'ricochet' && near < 46) useG = true
     else if (it === 'turret' && near < 38) useG = true

@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=2'
+import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=3'
 
 export const DT = 1 / 60
 export const G = 24
@@ -32,7 +32,7 @@ export const CAR_TYPES = [
 // アイテム。role D=運転だけが使う・G=射手だけが使う
 export const ITEMS = {
   turbo: { role: 'D', name: 'ターボ', ammo: 1 }, spear: { role: 'D', name: '槍', ammo: 1 }, oil: { role: 'D', name: 'オイル', ammo: 2 }, mine: { role: 'D', name: '地雷', ammo: 2 }, repair: { role: 'S', name: '修理', instant: true },
-  grenade: { role: 'G', name: '手榴弾', ammo: 3 }, smoke: { role: 'G', name: '煙幕', ammo: 2 }, ricochet: { role: 'G', name: '跳弾', ammo: 1 }, turret: { role: 'G', name: 'タレット', ammo: 1 },
+  grenade: { role: 'G', name: '手榴弾', ammo: 3 }, flash: { role: 'G', name: '閃光弾', ammo: 2 }, smoke: { role: 'G', name: '煙幕', ammo: 2 }, ricochet: { role: 'G', name: '跳弾', ammo: 1 }, turret: { role: 'G', name: 'タレット', ammo: 1 },
 }
 export const ITEM_NAMES = Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.name]))
 export const ITEM_AMMO = Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.ammo || 1]))
@@ -43,7 +43,7 @@ let UID = 1
 function newCar(S, x, z, yaw, team, type = 0) {
   const c = {
     id: UID++, team, type, x, z, y: H(x, z), yaw, vx: 0, vz: 0, vy: 0, steer: 0, pitch: 0, roll: 0, air: false,
-    hp: 100, alive: true, wreckT: 0, boost: 1, boostLock: false, gunYaw: yaw, turboT: 0, spearT: 0, thr: 0, brk: 0, hb: 0, yawRate: 0, ax: 0, slip: 0,
+    hp: 100, alive: true, wreckT: 0, boost: 1, boostLock: false, gunYaw: yaw, turboT: 0, spearT: 0, flashT: 0, flashDur: 1, thr: 0, brk: 0, hb: 0, yawRate: 0, ax: 0, slip: 0,
     lastHit: null, oilT: 0, invT: 0, spin: 0, speedKmh: 0, dmgFlash: 0, spot: -1, wreckV: [0, 0],
   }
   c.px = c.x; c.py = c.y; c.pz = c.z; c.pyaw = c.yaw; c.pgun = c.gunYaw; c.ppitch = 0; c.proll = 0
@@ -75,8 +75,8 @@ export function createState(seed = 1, opts = {}) {
   PICKUP_SPOTS.forEach((sp, i) => S.pickups.push({ x: sp.x, z: sp.z, type: pickType(S), t: 0, id: i }))
   return S
 }
-const PICK_W = [['turbo', 2], ['spear', 2], ['oil', 2], ['mine', 2], ['repair', 3], ['grenade', 3], ['smoke', 2], ['ricochet', 2], ['turret', 2]]
-function pickType(S) { let r = S.rng() * 20, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return 'repair' }
+const PICK_W = [['turbo', 2], ['spear', 2], ['oil', 2], ['mine', 2], ['repair', 3], ['grenade', 3], ['smoke', 2], ['ricochet', 2], ['turret', 2], ['flash', 2]]
+function pickType(S) { let r = S.rng() * 22, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return 'repair' }
 export const carById = (S, id) => S.cars.find(c => c.id === id)
 export const teamCar = (S, t) => t.car >= 0 ? carById(S, t.car) : null
 export const ev = (S, o) => S.events.push(o)
@@ -169,6 +169,7 @@ function useDriverItem(S, t, c) {
 function useGunnerItem(S, t, c) {
   const it = t.iG, dx = Math.sin(c.gunYaw), dz = Math.cos(c.gunYaw)
   if (it.type === 'grenade') { S.bullets.push({ type: 'grenade', team: t.id, x: c.x + dx * 1.4, y: c.y + 2.4, z: c.z + dz * 1.4, px: c.x, py: c.y + 2.4, pz: c.z, vx: dx * 20 + c.vx * 0.6, vz: dz * 20 + c.vz * 0.6, vy: 9, life: 2.1, id: UID++ }); ev(S, { k: 'throw', team: t.id, x: c.x, y: c.y + 2.4, z: c.z }) }
+  else if (it.type === 'flash') { S.bullets.push({ type: 'grenade', flash: true, team: t.id, x: c.x + dx * 1.4, y: c.y + 2.4, z: c.z + dz * 1.4, px: c.x, py: c.y + 2.4, pz: c.z, vx: dx * 22 + c.vx * 0.6, vz: dz * 22 + c.vz * 0.6, vy: 8, life: 1.5, id: UID++ }); ev(S, { k: 'throw', team: t.id, x: c.x, y: c.y + 2.4, z: c.z }) }
   else if (it.type === 'smoke') { const px = c.x + dx * 9, pz = c.z + dz * 9; S.smokes.push({ x: px, z: pz, y: H(px, pz), r: 7.5, life: 10, team: t.id, id: UID++ }); ev(S, { k: 'smoke', team: t.id, x: px, y: H(px, pz), z: pz }) }
   else if (it.type === 'ricochet') { t.ricT = 14; ev(S, { k: 'ricochet', team: t.id, x: c.x, y: c.y, z: c.z }) }
   else if (it.type === 'turret') { const px = c.x + dx * 4, pz = c.z + dz * 4; if (solidAtPoint(px, c.y + 1, pz) || solidAtPoint(px, c.y + 0.3, pz) || Math.abs(px) > WORLD - 3 || Math.abs(pz) > WORLD - 3) { ev(S, { k: 'noTurret', team: t.id, x: c.x, y: c.y, z: c.z }); return }
@@ -217,7 +218,7 @@ function updateCar(S, c, dt) {
   let inp = null
   if (t && !t.out && t.car === c.id && t.inp) inp = t.inp
   if (!live) inp = null
-  c.dmgFlash = Math.max(0, c.dmgFlash - dt)
+  c.dmgFlash = Math.max(0, c.dmgFlash - dt); c.flashT = Math.max(0, c.flashT - dt)
   c.oilT = Math.max(0, c.oilT - dt)
   // ブースト残量
   const T = CAR_TYPES[c.type] || CAR_TYPES[0]
@@ -430,7 +431,7 @@ function updateBullets(S, dt) {
       const h = H(b.x, b.z)
       if (b.y < h + 0.15) { b.y = h + 0.15; if (b.vy < -2) { b.vy = -b.vy * 0.45; ev(S, { k: 'bounce', x: b.x, y: b.y, z: b.z }) } else b.vy = 0; b.vx *= 0.82; b.vz *= 0.82 }
       if (solidAtPoint(b.x, b.y, b.z) || Math.abs(b.x) > WORLD || Math.abs(b.z) > WORLD) { b.x = b.px; b.z = b.pz; b.vx *= -0.5; b.vz *= -0.5 }
-      if (b.life <= 0) { explode(S, b.x, b.y, b.z, b.team, 6.5, 40, 'rocket'); B.splice(i, 1) }
+      if (b.life <= 0) { if (b.flash) flashBurst(S, b.x, b.y, b.z, b.team); else explode(S, b.x, b.y, b.z, b.team, 6.5, 40, 'rocket'); B.splice(i, 1) }
       continue
     }
     if (b.type === 'rocket') {
@@ -497,6 +498,19 @@ function updateBullets(S, dt) {
       B.splice(i, 1); continue
     }
     if (b.life <= 0) { if (b.type === 'rocket') explode(S, b.x, b.y, b.z, b.team, WEAPONS.rocket.r, WEAPONS.rocket.dmg, 'rocket'); B.splice(i, 1) }
+  }
+}
+// 閃光弾: 近いほど長く・強く。敵は最大約3秒、自分たち（投げた車も）は4割まで。壁ごしは半分
+export const FLASH_R = 24
+function flashBurst(S, x, y, z, by) {
+  ev(S, { k: 'flash', x, y, z, team: by })
+  for (const c of S.cars) {
+    if (!c.alive || c.team < 0) continue
+    const d = Math.hypot(c.x - x, c.z - z, c.y + 1.5 - y); if (d > FLASH_R) continue
+    let dur = 3.0 * Math.pow(1 - d / FLASH_R, 0.8) + 0.25
+    if (!lineClear(x, y, z, c.x, c.y + 1.5, c.z)) dur *= 0.5
+    if (c.team === by) dur *= 0.4
+    if (dur > c.flashT) { c.flashT = dur; c.flashDur = dur }
   }
 }
 export function angDiff(a, b) { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d }

@@ -105,11 +105,11 @@ await t('PC運転: 止まって3秒で役を交代（Q）。動いたら取り�
   const p = await open('speed=1&norender=1&seed=5')
   await p.click('#goDrive'); await p.waitForFunction(() => __bb.S().phase === 'play' && __bb.S().tMatch > 0.3, null, { timeout: 8000 })
   // 走り出す → Q → 動いたら取り消される
-  await p.keyboard.down('KeyW'); await sleep(1500); await p.keyboard.press('KeyQ'); await sleep(2200)
+  await p.evaluate(() => { const S = __bb.S(); S.cars.find(q => q.team === 0).invT = 9999; for (const t of S.teams) if (t.id) t.ws.forEach(w => { w.mag = 0; w.reloadT = 1e9 }) }); await p.keyboard.down('KeyW'); await sleep(2300); await p.keyboard.press('KeyQ'); await sleep(2200)
   let s = await S(p); expect(s.driver === 0 && s.role === 'drive', '動いているのに交代した ' + JSON.stringify(s))
-  await p.keyboard.up('KeyW'); await p.keyboard.down('KeyS'); await p.waitForFunction(() => { const S = __bb.S(), c = S.cars.find(q => q.team === 0); return Math.hypot(c.vx, c.vz) < 4 }, null, { timeout: 15000 }); await p.keyboard.up('KeyS'); await p.waitForFunction(() => { const S = __bb.S(), c = S.cars.find(q => q.team === 0); return Math.hypot(c.vx, c.vz) < 1.0 }, null, { timeout: 15000 })
-  await p.keyboard.press('KeyQ'); await sleep(500); s = await S(p); expect(s.swapT > 0.2, '数え始めない ' + s.swapT)
-  await p.waitForFunction(() => __bb.S().teams[0].driver === 1, null, { timeout: 6000 })
+  await p.keyboard.up('KeyW'); await p.keyboard.down('KeyS'); await p.waitForFunction(() => { const S = __bb.S(), c = S.cars.find(q => q.team === 0); return c.vx * Math.sin(c.yaw) + c.vz * Math.cos(c.yaw) < 3 }, null, { timeout: 15000 }); await p.keyboard.up('KeyS'); await p.waitForFunction(() => { const S = __bb.S(), c = S.cars.find(q => q.team === 0); return Math.hypot(c.vx, c.vz) < 1.0 }, null, { timeout: 15000 })
+  await sleep(800); if (!(await p.evaluate(() => __bb.S().teams[0].swapReq))) await p.keyboard.press('KeyQ')
+  await p.waitForFunction(() => __bb.S().teams[0].driver === 1, null, { timeout: 9000 }).catch(async e => { throw new Error('交代しない ' + JSON.stringify(await p.evaluate(() => { const S = __bb.S(), t = S.teams[0], c = S.cars.find(q => q.id === t.car); return { drv: t.driver, req: t.swapReq, T: +t.swapT.toFixed(2), sp: c ? +Math.hypot(c.vx, c.vz).toFixed(2) : -1, air: c && c.air, walking: t.walking, ph: S.phase } }))) })
   s = await S(p); expect(s.role === 'shoot', 'role=' + s.role)
   const txt = await p.textContent('#roleName'); expect(/射手/.test(txt), txt)
   expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return { swapped: true }

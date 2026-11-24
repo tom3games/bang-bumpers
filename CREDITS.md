@@ -1,0 +1,56 @@
+- snd/crash1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/crash2.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/crash3.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/crash4.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/boom1.mp3: File:Explosion-LS100155.ogg / Fg2 / Public domain
+- snd/boom2.mp3: File:Explosion 10.ogg / tcpp / Public domain
+- snd/boom3.mp3: File:Explosions-LS100150.ogg / Fg2 / Public domain
+- snd/boom4.mp3: File:Explosions-LS100152.ogg / Fg2 / Public domain
+- snd/debris1.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/debris2.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/thud.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/glass1.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/glass2.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/clink1.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/clink2.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/clink3.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/punch1.mp3: 75 CC0 breaking / falling / hit sfx（bfh1_hit_05）/ rubberduck / CC0
+- snd/punch2.mp3: 75 CC0 breaking / falling / hit sfx（bfh1_hit_03）/ rubberduck / CC0
+- snd/hitl1.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/hitl2.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/hitl3.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/repair1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/engine.mp3: racing car engine sound loops / domasx2 / CC0
+- snd/horn.mp3: File:Car Horn.wav / 15HPanska_Ruttner_Jan / CC0
+- snd/tick.mp3: 51 UI sound effects (buttons, switches and clicks) / Kenney / CC0
+- snd/win.mp3: 85 Short music jingles / Kenney / CC0
+- snd/lose.mp3: 85 Short music jingles / Kenney / CC0
+- snd/jet.mp3: Air whoosh / pyranostudios / CC0
+- snd/step1.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/step2.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/boxbreak.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/pin.mp3: Gun reload, lock or click sound / pauliuw / CC0
+- 地雷の「カチッ」は snd/pin.mp3（上と同じ素材）を鳴らし直して使っている。耳鳴りの素材は無く、音は全体を 1.2秒こもらせるだけ（js/sfx.js の muffle）
+- snd/latch.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/roll1.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/roll2.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/spear.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/pop1.mp3: 3 Pop Sounds / wubitog / CC0
+- snd/pop2.mp3: 3 Pop Sounds / wubitog / CC0
+- snd/pop3.mp3: 3 Pop Sounds / wubitog / CC0
+- snd/shot1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/shot2.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/plop1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/plop2.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/spring1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/spring2.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/paper1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/paper2.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/splash1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/boom5.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/bgm.mp3: Catch me if you can! / poinl / CC0
+- snd/switch1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/bell.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/amb1.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/amb2.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/spring3.mp3: 100 CC0 SFX / rubberduck / CC0

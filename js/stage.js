@@ -1,0 +1,515 @@
+// 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
+import * as THREE from 'three'
+import { HALF, BOWL, RAMPS, DECK, POLES, BOXES, H, bowlH, solidAtPoint, SPARE_SPOTS } from './arena.js'
+import * as TX from './textures.js'
+import { buildCar, buildWalker, rbox, Baker } from './models.js'
+import { Particles, Splats, Debris, Rings } from './fx.js'
+import { TEAM_COLORS, MAXF } from './sim.js'
+
+const lerp = (a, b, t) => a + (b - a) * t
+const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
+const HEX = h => '#' + h.toString(16).padStart(6, '0')
+
+export class Stage {
+  constructor(host, opts = {}) {
+    this.low = !!opts.low; this.host = host; this.snd = () => {}; this.focus = new THREE.Vector3(0, 0, 40)
+    const r = this.renderer = new THREE.WebGLRenderer({ antialias: !this.low, powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserve })
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.low ? 1.6 : 2))
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap
+    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.3
+    host.appendChild(r.domElement); r.domElement.id = 'gl'
+    this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xb3a68f); this.scene.fog = new THREE.FogExp2(0xb3a68f, 0.0085)
+    this.cam = new THREE.PerspectiveCamera(62, 1, 0.3, 260)
+    this.camPos = new THREE.Vector3(0, 8, 60); this.camLook = new THREE.Vector3(0, 1, 0); this.camYaw = Math.PI; this.shake = 0; this.fov = 62
+    this.time = 0
+    this.cars = new Map(); this.walkers = []; this.t0 = 0
+    this.buildEnv(); this.buildLights(); this.buildArena(); this.buildDynamic()
+    this.resize()
+  }
+  resize() {
+    const w = this.host.clientWidth || innerWidth, h = this.host.clientHeight || innerHeight
+    this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'
+    this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); this.w = w; this.h = h
+    const sc = h * this.renderer.getPixelRatio() * 0.5
+    this.pSmoke && this.pSmoke.setScale(sc); this.pFire && this.pFire.setScale(sc)
+  }
+  // ---------------------------------------------------------------- 環境の映り込みと光
+  buildEnv() {
+    const env = new THREE.Scene()
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(50, 24, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true }))
+    const pos = dome.geometry.attributes.position, col = new Float32Array(pos.count * 3), c = new THREE.Color()
+    for (let i = 0; i < pos.count; i++) { const y = pos.getY(i) / 50; c.setRGB(...(y > 0 ? [0.38 + y * 0.2, 0.34 + y * 0.18, 0.3 + y * 0.14] : [0.22, 0.2, 0.18])); col.set([c.r, c.g, c.b], i * 3) }
+    dome.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3)); env.add(dome)
+    for (let i = 0; i < 6; i++) { const p = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 4.4, 3.4) })); const a = i / 6 * 6.283; p.position.set(Math.sin(a) * 40, 22, Math.cos(a) * 40); p.lookAt(0, 0, 0); env.add(p) }
+    const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(env, 0.03).texture; this.scene.environmentIntensity = 0.75; pm.dispose()
+  }
+  buildLights() {
+    const s = this.scene
+    s.add(new THREE.HemisphereLight(0xfff0d8, 0x5a5348, 1.7))
+    const sun = this.sun = new THREE.DirectionalLight(0xffe8c0, 3.4); sun.position.set(-30, 48, 22); sun.castShadow = true
+    sun.shadow.mapSize.set(this.low ? 1024 : 2048, this.low ? 1024 : 2048); const sc = sun.shadow.camera; sc.left = -44; sc.right = 44; sc.top = 44; sc.bottom = -44; sc.near = 5; sc.far = 140; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05
+    s.add(sun); s.add(sun.target)
+    const fill = new THREE.DirectionalLight(0x9db4d6, 0.6); fill.position.set(30, 20, -30); s.add(fill)
+    this.sunOff = new THREE.Vector3(-30, 48, 22)
+  }
+  // ---------------------------------------------------------------- 固定の景色
+  buildArena() {
+    const S = this.scene, aniso = this.low ? 4 : 8
+    const addB = (bk, mat, cast = true, recv = true) => { const m = bk.mesh(mat, cast); if (!m) return null; m.receiveShadow = recv; S.add(m); return m }
+    const uvs = (geo, su, sv) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv); return geo }
+    // 床（すり鉢だけ高さを持つ）
+    const seg = 160, fg = new THREE.PlaneGeometry(HALF * 2, HALF * 2, seg, seg); fg.rotateX(-Math.PI / 2)
+    const fp = fg.attributes.position; for (let i = 0; i < fp.count; i++) fp.setY(i, bowlH(fp.getX(i), fp.getZ(i))); fg.computeVertexNormals()
+    const floor = new THREE.Mesh(fg, new THREE.MeshStandardMaterial({ map: TX.floorTexture(this.low ? 1024 : 2048, aniso), roughness: 0.82, metalness: 0.05 })); floor.receiveShadow = true; S.add(floor)
+    // 壁
+    const wm = new THREE.MeshStandardMaterial({ map: TX.wallTexture(aniso), emissiveMap: TX.wallEmissive(), emissive: 0xffffff, emissiveIntensity: 1.35, roughness: 0.8, metalness: 0.3 })
+    const WH = 24, bw = new Baker(), wg = new THREE.PlaneGeometry(HALF * 2, WH)
+    for (const [x, z, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]]) bw.add(wg, x, WH / 2, z, null, 0, ry, 0)
+    addB(bw, wm, false, true)
+    // 屋根と梁（まとめて1つ）
+    const roof = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2.2, HALF * 2.2), new THREE.MeshStandardMaterial({ color: 0x2c2a27, roughness: 0.9, side: THREE.DoubleSide })); roof.rotation.x = Math.PI / 2; roof.position.y = WH + 0.5; S.add(roof)
+    const steel = new THREE.MeshStandardMaterial({ color: 0x3b3f44, roughness: 0.55, metalness: 0.7 })
+    const bs = new Baker()
+    for (let i = -5; i <= 5; i++) { bs.add(new THREE.BoxGeometry(HALF * 2.05, 1.1, 0.7), 0, WH - 1, i * 11); bs.add(new THREE.BoxGeometry(0.7, 1.1, HALF * 2.05), i * 11, WH - 1.6, 0) }
+    addB(bs, steel, false, false)
+    // つり下げ照明（同じ形を並べる）
+    const lampPos = []; for (let x = -36; x <= 36; x += 24) for (let z = -36; z <= 36; z += 24) lampPos.push([x, z])
+    const m4 = new THREE.Matrix4()
+    const lamps = new THREE.InstancedMesh(new THREE.ConeGeometry(1.5, 1.1, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0x2f3236, roughness: 0.5, metalness: 0.7, side: THREE.DoubleSide }), lampPos.length)
+    const discG = new THREE.CircleGeometry(1.0, 16); discG.rotateX(Math.PI / 2)
+    const discs = new THREE.InstancedMesh(discG, new THREE.MeshBasicMaterial({ color: 0xfff1c8, toneMapped: false }), lampPos.length)
+    const chains = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 3.4, 4), steel, lampPos.length)
+    lampPos.forEach(([x, z], i) => { lamps.setMatrixAt(i, m4.makeTranslation(x, WH - 4, z)); discs.setMatrixAt(i, m4.makeTranslation(x, WH - 4.5, z)); chains.setMatrixAt(i, m4.makeTranslation(x, WH - 2.3, z)) })
+    S.add(lamps, discs, chains)
+    const gp = new THREE.BufferGeometry(); gp.setAttribute('position', new THREE.Float32BufferAttribute(lampPos.flatMap(([x, z]) => [x, WH - 5.2, z]), 3))
+    const glowPts = new THREE.Points(gp, new THREE.PointsMaterial({ map: TX.glowTexture(), color: 0xffe2a8, size: 9, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.6, fog: false })); S.add(glowPts)
+    // 窓からの光の筋（まとめて1つ）
+    const bt = TX.beamTexture(), bm = new THREE.MeshBasicMaterial({ map: bt, transparent: true, opacity: 0.42, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false })
+    const sd = new THREE.Vector3(30, -48, -22).normalize(), up = sd.clone().multiplyScalar(-1), bb = new Baker(), qq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), up), ee = new THREE.Euler().setFromQuaternion(qq)
+    for (let i = 0; i < 9; i++) {
+      const gx = -40 + i * 11 + (i % 2) * 4, gz = -26 + ((i * 37) % 52), L = 56, w = 5 + (i % 3) * 2.5
+      for (const rot of [0, Math.PI / 2]) { const g = new THREE.PlaneGeometry(w, L); g.rotateY(rot); bb.add(g, gx + up.x * L / 2, up.y * L / 2, gz + up.z * L / 2, null, ee.x, ee.y, ee.z) }
+    }
+    { const m = bb.mesh(bm, false); m.renderOrder = 3; S.add(m) }
+    // 坂（くさび）と上の通路
+    const rampMat = new THREE.MeshStandardMaterial({ map: TX.steelTexture(aniso), roughness: 0.5, metalness: 0.6 })
+    const hzM = new THREE.MeshStandardMaterial({ map: TX.hazardTexture('#e8b81c', aniso), roughness: 0.6 })
+    const bRamp = new Baker(), bHaz = new Baker()
+    const wedge = (x, z, ang, len, w, h, isDeck) => {
+      const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(len, 0); sh.lineTo(len, h); sh.closePath()
+      const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2); uvs(g, 0.35, 0.35)
+      bRamp.add(g, x, 0, z, null, 0, ang - Math.PI / 2, 0)
+      if (!isDeck) bHaz.add(uvs(new THREE.BoxGeometry(0.5, 0.14, w), 0.4, w / 1.4), Math.sin(ang) * (len - 0.3) + x, h + 0.02, Math.cos(ang) * (len - 0.3) + z, null, 0, ang - Math.PI / 2, 0)
+    }
+    for (const p of RAMPS) wedge(p.x, p.z, p.ang, p.len, p.w, p.h, false)
+    const dw = DECK.x1 - DECK.x0, dd = DECK.z1 - DECK.z0
+    wedge(DECK.x1 + DECK.ramp, (DECK.z0 + DECK.z1) / 2, -Math.PI / 2, DECK.ramp, dd, DECK.h, true)
+    wedge(DECK.x0 - DECK.ramp, (DECK.z0 + DECK.z1) / 2, Math.PI / 2, DECK.ramp, dd, DECK.h, true)
+    bHaz.add(uvs(new THREE.BoxGeometry(dw, 0.12, 0.8), dw / 1.2 * 0.5, 1), 0, DECK.h + 0.07, DECK.z1 - 0.4)
+    addB(bRamp, rampMat); addB(bHaz, hzM, false)
+    const deckM = new THREE.MeshStandardMaterial({ map: TX.steelTexture(aniso), roughness: 0.55, metalness: 0.55 }); deckM.map = deckM.map.clone(); deckM.map.repeat.set(20, 3.5); deckM.map.needsUpdate = true
+    const db = new THREE.Mesh(new THREE.BoxGeometry(dw, DECK.h, dd), deckM); db.position.set((DECK.x0 + DECK.x1) / 2, DECK.h / 2, (DECK.z0 + DECK.z1) / 2); db.castShadow = db.receiveShadow = true; S.add(db)
+    const dface = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.92, side: THREE.DoubleSide }); dface.map.repeat.set(16, 1.2)
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(dw, DECK.h), dface); front.position.set(0, DECK.h / 2, DECK.z1 + 0.03); front.rotation.y = Math.PI; front.receiveShadow = true; S.add(front)
+    // 柱
+    const poleM = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 }); poleM.map.repeat.set(1, 1)
+    const bPole = new Baker(), bBand = new Baker(), bRing = new Baker()
+    for (const o of POLES) {
+      const hgt = WH - o.base
+      bPole.add(uvs(new THREE.CylinderGeometry(o.r, o.r * (o.kind === 'core' ? 1.0 : 1.04), hgt, o.kind === 'core' ? 28 : 14), Math.max(2, o.r * 2), 6), o.x, o.base + hgt / 2, o.z)
+      bBand.add(uvs(new THREE.CylinderGeometry(o.r + 0.03, o.r + 0.03, 1.4, 18, 1, true), Math.max(2, Math.round(o.r * 3)), 1), o.x, o.base + 0.8, o.z)
+      if (o.kind === 'core') for (const yy of [7, 12]) bRing.add(new THREE.TorusGeometry(o.r + 0.05, 0.12, 8, 28), o.x, o.base + yy, o.z, 0xff4b2a, Math.PI / 2)
+    }
+    addB(bPole, poleM); addB(bBand, hzM, false)
+    { const m = bRing.mesh(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), false); S.add(m) }
+    // 箱・機械・バリア（種類ごとに1つ）
+    const bCr = new Baker(), bMc = new Baker(), bBr = new Baker(), bBh = new Baker()
+    for (const o of BOXES) {
+      if (o.kind === 'barrier') {
+        const w = Math.max(o.w, o.d), d = Math.min(o.w, o.d), sh = new THREE.Shape()
+        sh.moveTo(-d / 2, 0); sh.lineTo(d / 2, 0); sh.lineTo(d * 0.28, o.h * 0.55); sh.lineTo(d * 0.18, o.h); sh.lineTo(-d * 0.18, o.h); sh.lineTo(-d * 0.28, o.h * 0.55); sh.closePath()
+        const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2); uvs(g, 0.3, 0.3)
+        bBr.add(g, o.x, o.base, o.z, null, 0, o.w > o.d ? Math.PI / 2 : 0, 0)
+        bBh.add(uvs(new THREE.BoxGeometry(o.w + 0.02, 0.22, o.d + 0.02), Math.max(o.w, o.d) / 1.1 * 0.5, 1), o.x, o.base + o.h - 0.25, o.z)
+      } else (o.kind === 'machine' ? bMc : bCr).add(new THREE.BoxGeometry(o.w, o.h, o.d), o.x, o.base + o.h / 2, o.z, null, 0, o.kind === 'crate' ? (o.x * 0.37 + o.z * 0.11) % 0.12 : 0, 0)
+    }
+    addB(bCr, new THREE.MeshStandardMaterial({ map: TX.crateTexture(aniso), roughness: 0.85 }))
+    addB(bMc, new THREE.MeshStandardMaterial({ map: TX.machineTexture(aniso), roughness: 0.55, metalness: 0.35 }))
+    addB(bBr, new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 })); addB(bBh, hzM, false)
+    this.buildDecor(steel)
+    this.banners()
+  }
+  buildDecor(steel) {
+    const S = this.scene, R = (() => { let a = 99; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } })()
+    // ドラム缶（壁ぎわに寄せ集め）
+    const barrels = []
+    for (let i = 0; i < 46; i++) { const side = i % 4, t = (R() - 0.5) * 110, off = 58.4 + R() * 1.0; const p = side === 0 ? [t, -off] : side === 1 ? [t, off] : side === 2 ? [-off, t] : [off, t]; barrels.push(p) }
+    const bm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.46, 0.46, 1.2, 12), new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.6 }), barrels.length)
+    const m4 = new THREE.Matrix4(), cc = new THREE.Color(), cols = [0xb23a2a, 0x2c5ea8, 0x3a7a4c, 0xc89a2a, 0x555a5e]
+    barrels.forEach((p, i) => { m4.makeTranslation(p[0], 0.6, p[1]); bm.setMatrixAt(i, m4); bm.setColorAt(i, cc.setHex(cols[(R() * 5) | 0])) }); bm.castShadow = bm.receiveShadow = true; S.add(bm)
+    // タイヤの山
+    const tires = []; for (const [x, z] of [[-57.5, -20], [-57.5, 30], [57.5, 10], [57.5, -34], [-20, 57.5], [34, 57.5]]) for (let i = 0; i < 4; i++) tires.push([x + (R() - 0.5) * 0.4, 0.25 + i * 0.5, z + (R() - 0.5) * 0.4])
+    const tg = new THREE.TorusGeometry(0.42, 0.2, 8, 14); tg.rotateX(Math.PI / 2)
+    const tm = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.9 }), tires.length)
+    tires.forEach((p, i) => { m4.makeTranslation(p[0], p[1], p[2]); tm.setMatrixAt(i, m4) }); tm.castShadow = true; S.add(tm)
+    // 壁の配管と配電盤（まとめて1つ）
+    const bk = new Baker(), pc = 0x7a5d3a
+    for (const [y, r] of [[5.6, 0.32], [7.2, 0.2], [8.4, 0.26]]) for (const z of [-HALF + 0.5, HALF - 0.5]) bk.add(new THREE.CylinderGeometry(r, r, HALF * 2, 8), 0, y, z, pc, 0, 0, Math.PI / 2)
+    for (const x of [-HALF + 0.5, HALF - 0.5]) bk.add(new THREE.CylinderGeometry(0.3, 0.3, HALF * 2, 8), x, 6.2, 0, pc, Math.PI / 2)
+    for (const [x, z, ry] of [[-30, -HALF + 0.7, 0], [14, HALF - 0.7, Math.PI], [HALF - 0.7, 22, -Math.PI / 2], [-HALF + 0.7, -40, Math.PI / 2], [-HALF + 0.7, 28, Math.PI / 2]]) bk.add(new THREE.BoxGeometry(3.2, 3.4, 1.0), x, 1.7, z, 0x5b6f78, 0, ry, 0)
+    const m = bk.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.5 }), false); S.add(m)
+  }
+  // 万国旗（チームの色の三角）と、壁の大きな看板
+  banners() {
+    const S = this.scene, tri = new THREE.BufferGeometry(); tri.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.7, 0, 0, 0.7, 0, 0, 0, -1.3, 0]), 3)); tri.computeVertexNormals()
+    const im = new THREE.InstancedMesh(tri, new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide }), 80), m4 = new THREE.Matrix4(), c = new THREE.Color()
+    let k = 0
+    for (const zz of [-24, 24]) for (let i = 0; i < 40; i++) { const x = -58 + i * 2.95; m4.makeTranslation(x, 20.2 + Math.sin(i * 1.3) * 0.12, zz); im.setMatrixAt(k, m4); im.setColorAt(k, c.setHex(TEAM_COLORS[i % 5])); k++ }
+    im.count = k; S.add(im)
+    const bl = new Baker(); for (const zz of [-24, 24]) bl.add(new THREE.CylinderGeometry(0.03, 0.03, 118, 4), 0, 20.25, zz, 0x222222, 0, 0, Math.PI / 2)
+    S.add(bl.mesh(new THREE.MeshBasicMaterial({ vertexColors: true }), false))
+    const c2 = document.createElement('canvas'); c2.width = 1024; c2.height = 256; const g = c2.getContext('2d')
+    g.fillStyle = '#e8b81c'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#1d1c1a'; for (let i = -256; i < 1100; i += 64) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 28, 0); g.lineTo(i + 28 - 256, 256); g.lineTo(i - 256, 256); g.fill() }
+    g.fillStyle = '#1d1c1a'; g.fillRect(40, 40, 944, 176); g.fillStyle = '#f2efe6'; g.font = '800 150px "Big Shoulders Display", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('BANG BUMPERS', 512, 136)
+    const bt = new THREE.CanvasTexture(c2); bt.colorSpace = THREE.SRGBColorSpace
+    const sg = new Baker(); const pg = new THREE.PlaneGeometry(26, 6.5); sg.add(pg, 0, 14, -HALF + 0.1); sg.add(pg, 0, 14, HALF - 0.1, null, 0, Math.PI, 0)
+    S.add(sg.mesh(new THREE.MeshStandardMaterial({ map: bt, roughness: 0.6, emissive: 0xffffff, emissiveMap: bt, emissiveIntensity: 0.35 }), false))
+  }
+  // ---------------------------------------------------------------- 動く物の入れ物
+  buildDynamic() {
+    const S = this.scene, sc = 800
+    this.pSmoke = new Particles(S, this.low ? 700 : 1400, false, sc); this.pFire = new Particles(S, this.low ? 700 : 1400, true, sc)
+    this.splats = new Splats(S, this.low ? 50 : 90); this.debris = new Debris(S); this.rings = new Rings(S)
+    // 弾
+    this.bulletM = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ toneMapped: false }), 160); this.bulletM.frustumCulled = false; this.bulletM.count = 0; S.add(this.bulletM)
+    this.confM = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.3, 0.2), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false }), 200); this.confM.frustumCulled = false; this.confM.count = 0; S.add(this.confM)
+    this.rockets = []
+    for (let i = 0; i < 6; i++) {
+      const g = new THREE.Group(), b = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.1, 10), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.4 })); b.rotation.x = Math.PI / 2; g.add(b)
+      const n = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 10), new THREE.MeshStandardMaterial({ color: 0xd8372a, roughness: 0.4 })); n.rotation.x = Math.PI / 2; n.position.z = 0.75; g.add(n)
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 4), new THREE.MeshStandardMaterial({ color: 0xb08a50 })); st.rotation.x = Math.PI / 2; st.position.z = -1.0; g.add(st)
+      g.visible = false; S.add(g); this.rockets.push(g)
+    }
+    // 地雷・オイル・拾い物
+    this.mineMs = []; this.oilMs = []
+    const mg = new THREE.CylinderGeometry(0.62, 0.7, 0.22, 16), mm = new THREE.MeshStandardMaterial({ color: 0x3b4a2e, roughness: 0.55, metalness: 0.4 }), lg = new THREE.SphereGeometry(0.12, 8, 6)
+    for (let i = 0; i < 10; i++) { const g = new THREE.Group(); const b = new THREE.Mesh(mg, mm); b.castShadow = true; g.add(b); const l = new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false })); l.position.y = 0.16; g.add(l); g.visible = false; S.add(g); this.mineMs.push({ g, l }) }
+    const og = new THREE.CircleGeometry(1, 28); og.rotateX(-Math.PI / 2)
+    for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(og, new THREE.MeshStandardMaterial({ color: 0x0b0b0e, roughness: 0.05, metalness: 0.9, transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: -3 })); m.visible = false; m.receiveShadow = true; S.add(m); this.oilMs.push(m) }
+    this.pickMs = []
+    const icons = { rocket: ['#d8372a', 'rocket'], confetti: ['#e8b81c', 'conf'], mine: ['#4a5a36', 'mine'], oil: ['#2a2c33', 'oil'], repair: ['#2f9e57', 'plus'] }
+    this.pickIcons = {}
+    for (const k in icons) this.pickIcons[k] = this.iconTex(icons[k][0], icons[k][1])
+    for (let i = 0; i < 12; i++) {
+      const g = new THREE.Group(), b = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.15, 1.15), new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1, emissive: 0xffffff, emissiveIntensity: 0.15 })); b.castShadow = true; g.add(b)
+      const ic = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false })); ic.scale.set(1.5, 1.5, 1); ic.position.y = 1.5; g.add(ic)
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.4, 28), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; g.add(ring)
+      g.visible = false; S.add(g); this.pickMs.push({ g, b, ic, ring })
+    }
+    // 人の入れ物（10人ぶん）
+    for (let i = 0; i < 10; i++) { const w = buildWalker(TEAM_COLORS[i >> 1]); w.g.visible = false; S.add(w.g); this.walkers.push(w) }
+    // 空き車のそばの矢印
+    this.arrowTex = this.iconTex('#e8b81c', 'arrow')
+  }
+  iconTex(bg, kind) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d')
+    g.fillStyle = bg; g.beginPath(); g.arc(64, 64, 58, 0, 7); g.fill(); g.strokeStyle = '#f2efe6'; g.lineWidth = 6; g.stroke()
+    g.fillStyle = '#f2efe6'; g.strokeStyle = '#f2efe6'; g.lineWidth = 8; g.lineCap = 'round'; g.lineJoin = 'round'
+    if (kind === 'rocket') { g.beginPath(); g.moveTo(64, 20); g.quadraticCurveTo(84, 50, 78, 84); g.lineTo(50, 84); g.quadraticCurveTo(44, 50, 64, 20); g.fill(); g.beginPath(); g.moveTo(50, 84); g.lineTo(40, 104); g.lineTo(56, 94); g.moveTo(78, 84); g.lineTo(88, 104); g.lineTo(72, 94); g.fill() }
+    else if (kind === 'conf') { g.beginPath(); g.moveTo(34, 98); g.lineTo(50, 52); g.lineTo(76, 78); g.closePath(); g.fill(); for (const [x, y, r] of [[78, 34, 7], [96, 56, 6], [60, 28, 5], [98, 82, 5], [84, 54, 4]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill() } }
+    else if (kind === 'mine') { g.beginPath(); g.arc(64, 70, 26, 0, 7); g.fill(); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; g.beginPath(); g.moveTo(64 + Math.cos(a) * 24, 70 + Math.sin(a) * 24); g.lineTo(64 + Math.cos(a) * 38, 70 + Math.sin(a) * 38); g.stroke() } }
+    else if (kind === 'oil') { g.beginPath(); g.moveTo(64, 24); g.quadraticCurveTo(100, 64, 86, 86); g.quadraticCurveTo(64, 112, 42, 86); g.quadraticCurveTo(28, 64, 64, 24); g.fill() }
+    else if (kind === 'plus') { g.fillRect(54, 26, 20, 76); g.fillRect(26, 54, 76, 20) }
+    else if (kind === 'arrow') { g.fillStyle = '#1d1c1a'; g.beginPath(); g.moveTo(64, 104); g.lineTo(26, 54); g.lineTo(50, 54); g.lineTo(50, 24); g.lineTo(78, 24); g.lineTo(78, 54); g.lineTo(102, 54); g.closePath(); g.fill() }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
+  }
+  // ---------------------------------------------------------------- 車の見た目を作る・直す
+  carView(c) {
+    let v = this.cars.get(c.id)
+    if (!v) {
+      const team = c.team
+      const col = team >= 0 ? TEAM_COLORS[team] : [0xd9d6cc, 0x7b8085, 0x9a6a40, 0x4a5a78, 0x8fa35a, 0xcfc095][c.id % 6]
+      v = buildCar(col, team >= 0 ? team + 1 : 0); v.team = team; v.col = col; v.hpShown = 100; v.wheelRot = 0; v.smokeT = 0; v.fireT = 0; v.flash = 0; v.pitchAcc = 0; v.sp0 = 0; v.exploded = false; v.hoodOpen = 0
+      v.g.traverse(o => { if (o.isMesh) o.matrixAutoUpdate = true })
+      this.scene.add(v.g); this.cars.set(c.id, v)
+      if (team < 0) v.paint.color.setHex(col)
+      v.beacon.visible = team < 0
+    }
+    if (v.team !== c.team) { // 空き車に乗った（色が変わる）
+      v.team = c.team; const col = c.team >= 0 ? TEAM_COLORS[c.team] : v.col
+      v.base.setHex(col); v.paint.color.setHex(col); v.flag.material.color.setHex(col); v.flag.material.emissive.setHex(col); v.beacon.visible = c.team < 0
+      v.gun.helm.material.color.setHex(col); v.drv.helm.material.color.setHex(col)
+      if (c.team >= 0) this.rings.ring(c.x, c.y, c.z, 3.5, col, 0.6)
+    }
+    return v
+  }
+  setHumanRole(c, humanTeam, humanDrives) {
+    const v = this.cars.get(c.id); if (!v || c.team !== humanTeam) return
+    const white = 0xf4f0e6, own = TEAM_COLORS[c.team]
+    v.drv.helm.material.color.setHex(humanDrives ? white : own); v.gun.helm.material.color.setHex(humanDrives ? own : white)
+  }
+  // ---------------------------------------------------------------- 毎フレーム
+  sync(S, alpha, dt, ctx) {
+    this.time += dt
+    const seen = new Set()
+    for (const c of S.cars) {
+      seen.add(c.id)
+      const v = this.carView(c)
+      const x = lerp(c.px, c.x, alpha), y = lerp(c.py, c.y, alpha), z = lerp(c.pz, c.z, alpha), yaw = lerpAng(c.pyaw, c.yaw, alpha)
+      const pitch = lerp(c.ppitch, c.pitch, alpha), roll = lerp(c.proll, c.roll, alpha)
+      v.g.position.set(x, y, z)
+      const sp = c.vx * Math.sin(c.yaw) + c.vz * Math.cos(c.yaw)
+      v.pitchAcc += ((v.sp0 - sp) * 0.012 - v.pitchAcc) * Math.min(1, 8 * dt); v.sp0 = sp
+      const hulk = !c.alive
+      if (hulk) { const k = Math.min(1, c.wreckT / 0.9); v.g.rotation.set(-pitch + (c.spin * 0.0), yaw, -roll + 0.38 * k * (((c.id * 7) % 2) ? 1 : -1), 'YXZ'); v.body.scale.set(1, 1 - 0.18 * k, 1) }
+      else { v.g.rotation.set(-pitch + Math.max(-0.1, Math.min(0.1, v.pitchAcc)), yaw, -roll + Math.max(-0.1, Math.min(0.1, -c.steer * sp * 0.003)), 'YXZ'); v.body.position.y = Math.sin(this.time * 14 + c.id) * 0.012 * Math.min(1, Math.abs(sp) / 10) }
+      // 車輪
+      v.wheelRot += sp * dt / 0.52
+      for (const w of v.wheels) { w.spin.rotation.x = v.wheelRot; if (w.front) w.piv.rotation.y = -c.steer * 0.5 }
+      // 砲塔
+      v.turret.rotation.y = lerpAng(c.pgun, c.gunYaw, alpha) - yaw
+      v.gun.flash.visible = v.flash > 0; v.flash -= dt
+      v.flag.rotation.y = Math.PI / 2 + Math.sin(this.time * 9 + c.id) * 0.25 + Math.min(1, Math.abs(sp) / 14) * 0.5; v.flag.scale.x = 0.9 + Math.sin(this.time * 13 + c.id) * 0.1
+      if (c.team < 0 && c.alive) { v.beacon.rotation.y += dt * 4; v.beacon.material.emissiveIntensity = 0.8 + Math.sin(this.time * 6) * 0.5; v.g.position.y = y }
+      // 壊れ具合の色・煙・火
+      this.damageFx(c, v, dt)
+      // 当たった時の白い点滅
+      v.paint.emissive.setHex(0xffffff); v.paint.emissiveIntensity = c.dmgFlash > 0 ? c.dmgFlash * 1.2 : 0
+      // 速度が出ている時の土煙と、ブーストの炎
+      if (c.alive && !c.air && Math.abs(sp) > 3 && (c.oilT > 0 || Math.abs(c.vx * Math.cos(c.yaw) * -1 + c.vz * Math.sin(c.yaw)) > 4.5)) { this.pSmoke.emit(x - Math.sin(c.yaw) * 1.4, y + 0.2, z - Math.cos(c.yaw) * 1.4, (Math.random() - 0.5) * 1.5, 0.8, (Math.random() - 0.5) * 1.5, 0.7, 0.7, 2.0, 0xcfc8ba, 0xcfc8ba, 0.28, 0, 1) }
+      if (c.boosting) { for (let i = 0; i < 2; i++) this.pFire.emit(x - Math.sin(c.yaw) * 2.2 + (Math.random() - 0.5) * 0.4, y + 0.55, z - Math.cos(c.yaw) * 2.2 + (Math.random() - 0.5) * 0.4, -Math.sin(c.yaw) * 7, 0.3, -Math.cos(c.yaw) * 7, 0.25, 0.9, 0.2, 0xffb04a, 0xff4a10, 0.9, 0, 3) }
+    }
+    for (const [id, v] of this.cars) if (!seen.has(id)) { this.scene.remove(v.g); this.cars.delete(id) }
+    this.syncPeople(S, alpha, dt, ctx)
+    this.syncBullets(S, alpha, dt)
+    this.syncThings(S, dt)
+    this.pSmoke.update(dt); this.pFire.update(dt); this.debris.update(dt); this.rings.update(dt)
+    if (!this.low || Math.random() < 0.5) { const f = this.focus; this.pSmoke.emit(f.x + (Math.random() - 0.5) * 60, 1 + Math.random() * 12, f.z + (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 0.6, 0.15, (Math.random() - 0.5) * 0.6, 7, 0.07, 0.07, 0xfff4d8, 0xfff4d8, 0.4, 0, 0) }
+  }
+  damageFx(c, v, dt) {
+    const hp = c.alive ? c.hp : 0
+    const burn = 1 - Math.max(0, Math.min(1, hp / 70))
+    const base = v.base
+    v.paint.color.copy(base).lerp(_scorch, c.alive ? burn * 0.72 : 0.9)
+    v.hoodOpen += ((hp < 40 ? 1 : 0) - v.hoodOpen) * Math.min(1, 5 * dt)
+    if (!c.alive) v.hoodOpen = 1
+    v.hoodPivot.rotation.x = -v.hoodOpen * 0.95
+    const px = c.x + Math.sin(c.yaw) * 1.4, pz = c.z + Math.cos(c.yaw) * 1.4
+    if (c.alive) {
+      if (hp < 65) { v.smokeT -= dt; if (v.smokeT <= 0) { v.smokeT = hp < 40 ? 0.04 : 0.1; const dark = hp < 40; this.pSmoke.emit(px + (Math.random() - 0.5) * 0.6, c.y + 1.3, pz + (Math.random() - 0.5) * 0.6, c.vx * 0.2 + (Math.random() - 0.5) * 0.8, 2.2 + Math.random(), c.vz * 0.2 + (Math.random() - 0.5) * 0.8, dark ? 1.7 : 1.3, 0.5, dark ? 3.2 : 2.2, dark ? 0x2a2826 : 0x9a9690, dark ? 0x1a1918 : 0xb4b0a8, dark ? 0.75 : 0.5, -0.4, 0.6) } }
+      if (hp < 22) { v.fireT -= dt; if (v.fireT <= 0) { v.fireT = 0.035; this.pFire.emit(px + (Math.random() - 0.5) * 0.9, c.y + 1.2, pz + (Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 1.2, 2.6 + Math.random() * 1.5, (Math.random() - 0.5) * 1.2, 0.55, 0.9, 0.2, 0xffb74a, 0xff3a0a, 0.95, -0.5, 0.3) } }
+    } else if (c.wreckT < 13) {
+      const k = 1 - c.wreckT / 13
+      v.fireT -= dt; if (v.fireT <= 0) { v.fireT = 0.05; this.pFire.emit(c.x + (Math.random() - 0.5) * 2, c.y + 1.0, c.z + (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 1.2, 2.5 * k + 1, (Math.random() - 0.5) * 1.2, 0.6, 1.1 * k + 0.3, 0.2, 0xffb74a, 0xff3a0a, 0.9, -0.5, 0.3) }
+      v.smokeT -= dt; if (v.smokeT <= 0) { v.smokeT = 0.08; this.pSmoke.emit(c.x + (Math.random() - 0.5) * 1.5, c.y + 1.5, c.z + (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 0.8, 2.6, (Math.random() - 0.5) * 0.8, 2.4, 0.8, 4.2, 0x1e1d1c, 0x2a2927, 0.7 * k + 0.2, -0.3, 0.5) }
+    }
+  }
+  syncPeople(S, alpha, dt, ctx) {
+    let wi = 0
+    for (const t of S.teams) {
+      const car = t.car >= 0 ? S.cars.find(q => q.id === t.car) : null
+      if (car) this.setHumanRole(car, S.humanTeam, t.driver === 0 && ctx.human)
+      for (const p of t.p) {
+        const w = this.walkers[t.id * 2 + p.idx]
+        if (p.state === 'walk' || p.state === 'fly') {
+          w.g.visible = true
+          const x = lerp(p.px, p.x, alpha), y = lerp(p.py, p.y, alpha), z = lerp(p.pz, p.z, alpha)
+          w.g.position.set(x, y, z)
+          const moving = p.state === 'walk' && (Math.hypot(p.x - p.px, p.z - p.pz) > 0.001)
+          if (p.state === 'fly') { w.g.rotation.set(Math.sin(this.time * 9 + p.idx) * 0.8, p.yaw, Math.cos(this.time * 7) * 0.8, 'YXZ'); w.armL.rotation.x = w.armR.rotation.x = -2.6; w.legL.rotation.x = 0.5; w.legR.rotation.x = -0.5 }
+          else {
+            w.g.rotation.set(0, lerpAng(w.g.rotation.y, p.yaw, Math.min(1, 12 * dt)), 0)
+            const sw = moving ? Math.sin(this.time * 13 + p.idx) : 0
+            w.legL.rotation.x = sw * 0.9; w.legR.rotation.x = -sw * 0.9; w.armL.rotation.x = -sw * 0.8; w.armR.rotation.x = sw * 0.8
+            w.g.position.y = y + Math.abs(sw) * 0.05
+            if (p.invT > 0) w.g.visible = Math.floor(this.time * 14) % 2 === 0
+          }
+        } else w.g.visible = false
+      }
+    }
+  }
+  syncBullets(S, alpha, dt) {
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color(), v = new THREE.Vector3(), s = new THREE.Vector3(), z = new THREE.Vector3(0, 0, 1)
+    let nb = 0, nc = 0, nr = 0
+    for (const b of S.bullets) {
+      const x = lerp(b.px, b.x, alpha), y = lerp(b.py, b.y, alpha), zz = lerp(b.pz, b.z, alpha)
+      if (b.type === 'paint') {
+        if (nb >= 160) continue
+        v.set(b.vx, b.vy, b.vz); const L = v.length(); v.multiplyScalar(1 / L); q.setFromUnitVectors(z, v); s.set(1, 1, 3.6)
+        m4.compose(new THREE.Vector3(x, y, zz), q, s); this.bulletM.setMatrixAt(nb, m4); this.bulletM.setColorAt(nb, c.setHex(TEAM_COLORS[b.team] ?? 0xffffff).multiplyScalar(1.6)); nb++
+      } else if (b.type === 'confetti') {
+        if (nc >= 200) continue
+        q.setFromEuler(new THREE.Euler(this.time * 9 + b.hue, this.time * 7 + b.id, 0)); s.set(1, 1, 1)
+        m4.compose(new THREE.Vector3(x, y, zz), q, s); this.confM.setMatrixAt(nc, m4); this.confM.setColorAt(nc, c.setHex(CONF[b.hue % CONF.length])); nc++
+      } else if (b.type === 'rocket') {
+        const r = this.rockets[nr++]; if (!r) continue
+        r.visible = true; r.position.set(x, y, zz); r.rotation.set(-Math.atan2(b.vy, Math.hypot(b.vx, b.vz)), b.yaw, 0, 'YXZ')
+        for (let i = 0; i < 2; i++) this.pFire.emit(x - Math.sin(b.yaw) * 1.1, y, zz - Math.cos(b.yaw) * 1.1, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 0.35, 0.5, 0.1, 0xffe08a, 0xff6a1a, 0.95, 0, 2)
+        this.pSmoke.emit(x - Math.sin(b.yaw) * 1.2, y, zz - Math.cos(b.yaw) * 1.2, 0, 0.3, 0, 1.1, 0.5, 1.9, 0xe8e4da, 0xc9c5bb, 0.45, 0, 0.5)
+        if (Math.random() < 0.6) this.pFire.emit(x, y, zz, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, 0.5, 0.12, 0.04, 0xffe9a0, 0xff9a30, 1, 8, 0.5)
+      }
+    }
+    this.bulletM.count = nb; this.bulletM.instanceMatrix.needsUpdate = true; if (this.bulletM.instanceColor) this.bulletM.instanceColor.needsUpdate = true
+    this.confM.count = nc; this.confM.instanceMatrix.needsUpdate = true; if (this.confM.instanceColor) this.confM.instanceColor.needsUpdate = true
+    for (let i = nr; i < this.rockets.length; i++) this.rockets[i].visible = false
+  }
+  syncThings(S, dt) {
+    S.mines.forEach((m, i) => { const o = this.mineMs[i]; if (!o) return; o.g.visible = true; o.g.position.set(m.x, m.y + 0.1, m.z); o.l.visible = m.arm > 0 ? Math.floor(this.time * 10) % 2 === 0 : Math.floor(this.time * 3) % 2 === 0 })
+    for (let i = S.mines.length; i < this.mineMs.length; i++) this.mineMs[i].g.visible = false
+    S.oils.forEach((o, i) => { const m = this.oilMs[i]; if (!m) return; m.visible = true; m.position.set(o.x, o.y + 0.05, o.z); const k = Math.min(1, (14 - o.life) / 0.5 + 0.2, o.life / 1); m.scale.setScalar(o.r * Math.max(0.2, k)) })
+    for (let i = S.oils.length; i < this.oilMs.length; i++) this.oilMs[i].visible = false
+    S.pickups.forEach((p, i) => {
+      const o = this.pickMs[i]; if (!o) return
+      o.g.visible = p.t <= 0
+      if (p.t > 0) return
+      const y = H(p.x, p.z)
+      o.g.position.set(p.x, y, p.z); o.b.position.y = 1.2 + Math.sin(this.time * 2.4 + i) * 0.18; o.b.rotation.y = this.time * 1.4 + i; o.b.rotation.x = 0.4
+      o.ic.position.y = 2.7 + Math.sin(this.time * 2.4 + i) * 0.18
+      if (o.type !== p.type) { o.type = p.type; o.ic.material.map = this.pickIcons[p.type]; o.ic.material.needsUpdate = true; o.b.material.color.setHex(PICKC[p.type]); o.b.material.emissive.setHex(PICKC[p.type]) }
+      o.ring.rotation.z = this.time
+    })
+    // 空き車の上の矢印は models の beacon が担当
+  }
+  // ---------------------------------------------------------------- 出来事 → 演出と音
+  dist(x, z) { return Math.hypot(x - this.focus.x, z - this.focus.z) }
+  vol(x, z, base = 1, r = 26) { return base / (1 + (this.dist(x, z) / r) ** 2) }
+  onEvent(e, S) {
+    const sm = this.pSmoke, fi = this.pFire, rnd = Math.random
+    switch (e.k) {
+      case 'shot': {
+        const col = TEAM_COLORS[e.team] ?? 0xffffff
+        const car = S.cars.find(c => c.team === e.team && c.alive); const v = car && this.cars.get(car.id); if (v) v.flash = 0.05
+        if (e.w === 'paint') { this.snd('pop', { vol: this.vol(e.x, e.z, 0.5, 30), rate: 1.1 + rnd() * 0.5, jitter: 0.08 }); fi.emit(e.x, e.y, e.z, 0, 0, 0, 0.07, 0.8, 0.3, 0xffffff, col, 0.9) }
+        else if (e.w === 'rocket') { this.snd('whoosh', { vol: this.vol(e.x, e.z, 0.8, 34), rate: 1.4 }); this.snd('spring', { vol: this.vol(e.x, e.z, 0.5, 30), rate: 0.9 }); for (let i = 0; i < 6; i++) sm.emit(e.x, e.y, e.z, (rnd() - 0.5) * 3, rnd() * 2, (rnd() - 0.5) * 3, 0.9, 0.5, 1.6, 0xe8e4da, 0xc9c5bb, 0.5, 0, 1.5) }
+        else { this.snd('shot', { vol: this.vol(e.x, e.z, 0.6, 30), rate: 1.3 }); this.snd('paper', { vol: this.vol(e.x, e.z, 0.6, 30), rate: 1.2 }); this.confettiBurst(e.x, e.y, e.z, 14, 6) }
+        break
+      }
+      case 'bhit': {
+        const col = TEAM_COLORS[e.team] ?? 0xffffff
+        if (e.what === 'car' || e.what === 'person') {
+          for (let i = 0; i < 6; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 6, rnd() * 4, (rnd() - 0.5) * 6, 0.4, 0.45, 0.15, col, col, 1, 14, 0.5)
+          this.snd(e.w === 'paint' ? 'clink' : 'paper', { vol: this.vol(e.x, e.z, 0.5, 28), rate: 1 + rnd() * 0.4 })
+        } else {
+          const sp = Math.hypot(e.vx, e.vz) || 1
+          let nx = 0, ny = 0, nz = 0
+          if (e.what === 'ground') ny = 1
+          else if (e.what === 'wall') { if (Math.abs(Math.abs(e.x) - HALF) < 0.5) nx = -Math.sign(e.x); else nz = -Math.sign(e.z) }
+          else { nx = -e.vx / sp; nz = -e.vz / sp }
+          if (e.w === 'paint') { this.splats.add(e.x, e.y, e.z, nx, ny, nz, col, e.what === 'ground' ? 1.1 : 0.9); this.snd('plop', { vol: this.vol(e.x, e.z, 0.28, 24), rate: 1.2 }) }
+          else this.confettiBurst(e.x, e.y, e.z, 5, 4)
+          for (let i = 0; i < 4; i++) fi.emit(e.x, e.y, e.z, nx * 3 + (rnd() - 0.5) * 4, ny * 3 + rnd() * 3, nz * 3 + (rnd() - 0.5) * 4, 0.35, 0.35, 0.1, col, col, 1, 12, 0.5)
+        }
+        break
+      }
+      case 'ram': {
+        const p = Math.min(1, e.power / 18)
+        for (let i = 0; i < 6 + p * 18; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 12 * (0.4 + p), rnd() * 7 * (0.4 + p), (rnd() - 0.5) * 12 * (0.4 + p), 0.4 + rnd() * 0.3, 0.3, 0.05, 0xfff0b0, 0xff7a20, 1, 20, 0.3)
+        for (let i = 0; i < 3 + p * 6; i++) sm.emit(e.x, e.y - 0.4, e.z, (rnd() - 0.5) * 3, 1 + rnd() * 2, (rnd() - 0.5) * 3, 0.9, 0.8, 2.6, 0xbfb8aa, 0xbfb8aa, 0.45, 0, 1)
+        this.snd(e.power > 12 ? 'crash' : 'hitl', { vol: this.vol(e.x, e.z, 0.35 + p * 0.65, 30), rate: 0.85 + rnd() * 0.3 })
+        this.addShake(e.x, e.z, 0.1 + p * 0.5)
+        if (e.power > 11) for (const id of [e.a, e.b]) { const v = this.cars.get(id); if (v && rnd() < 0.6) this.fling(v, e.x, e.z, 7 + p * 6) }
+        break
+      }
+      case 'wall': { const p = Math.min(1, e.power / 16); for (let i = 0; i < 4 + p * 10; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 8, rnd() * 5, (rnd() - 0.5) * 8, 0.35, 0.3, 0.05, 0xfff0b0, 0xff7a20, 1, 20, 0.3); this.snd('clink', { vol: this.vol(e.x, e.z, 0.3 + p * 0.5, 28), rate: 0.7 + rnd() * 0.3 }); this.addShake(e.x, e.z, 0.05 + p * 0.25); break }
+      case 'explode': this.bigExplosion(e, S); break
+      case 'boom': this.firework(e); break
+      case 'land': { const p = Math.min(1, e.power / 16); for (let i = 0; i < 8 + p * 12; i++) { const a = rnd() * 6.28; sm.emit(e.x + Math.sin(a), e.y + 0.2, e.z + Math.cos(a), Math.sin(a) * (3 + p * 3), 0.6, Math.cos(a) * (3 + p * 3), 0.9, 0.8, 2.6, 0xcbc4b6, 0xcbc4b6, 0.5, 0, 2) } if (e.power > 7) { this.snd('thud', { vol: this.vol(e.x, e.z, 0.4 + p * 0.5, 30), rate: 0.8 }); this.addShake(e.x, e.z, 0.1 + p * 0.3) } break }
+      case 'pickup': { const c = PICKC[e.type]; for (let i = 0; i < 18; i++) { const a = rnd() * 6.28, u = 2 + rnd() * 4; fi.emit(e.x, e.y + 1.2, e.z, Math.sin(a) * u, 3 + rnd() * 5, Math.cos(a) * u, 0.9, 0.5, 0.1, c, 0xffffff, 1, 8, 0.6) } this.rings.ring(e.x, e.y, e.z, 3, c, 0.5); this.snd('bell', { vol: this.vol(e.x, e.z, 0.5, 30), rate: 1.2 }); break }
+      case 'repair': { for (let i = 0; i < 20; i++) fi.emit(e.x + (rnd() - 0.5) * 2, e.y + 0.5, e.z + (rnd() - 0.5) * 2, 0, 2 + rnd() * 3, 0, 1, 0.5, 0.1, 0x6bff9a, 0xffffff, 0.9, -1, 0.5); this.snd('repair', { vol: this.vol(e.x, e.z, 0.7, 30) }); break }
+      case 'pdie': { const c = TEAM_COLORS[e.team]; for (let i = 0; i < 14; i++) fi.emit(e.x, e.y + 1, e.z, (rnd() - 0.5) * 9, rnd() * 8, (rnd() - 0.5) * 9, 0.8, 0.5, 0.1, c, 0xffffff, 1, 18, 0.4); this.confettiBurst(e.x, e.y + 1, e.z, 14, 7); this.snd('roll', { vol: this.vol(e.x, e.z, 0.4, 24), rate: 1.4 }); break }
+      case 'plant': for (let i = 0; i < 5; i++) sm.emit(e.x, e.y + 0.1, e.z, (rnd() - 0.5) * 2, 0.5, (rnd() - 0.5) * 2, 0.6, 0.4, 1.2, 0xcbc4b6, 0xcbc4b6, 0.4, 0, 2); this.snd('thud', { vol: this.vol(e.x, e.z, 0.25, 22), rate: 1.3 }); break
+      case 'runover': this.snd('punch', { vol: this.vol(e.x, e.z, 0.6, 24) }); this.confettiBurst(e.x, e.y + 1, e.z, 8, 5); break
+      case 'dropMine': this.snd('latch', { vol: this.vol(e.x, e.z, 0.5, 24) }); break
+      case 'dropOil': this.snd('splash', { vol: this.vol(e.x, e.z, 0.6, 24) }); for (let i = 0; i < 10; i++) fi.emit(e.x, e.y + 0.3, e.z, (rnd() - 0.5) * 4, 2 + rnd() * 3, (rnd() - 0.5) * 4, 0.6, 0.35, 0.1, 0x222228, 0x222228, 1, 14, 0.2); break
+      case 'slip': this.snd('roll', { vol: this.vol(e.x, e.z, 0.35, 24), rate: 1.6 }); break
+      case 'reload': this.snd('latch', { vol: this.vol(e.x, e.z, 0.35, 22), rate: 0.9 }); break
+      case 'reloaded': this.snd('pin', { vol: this.vol(e.x, e.z, 0.35, 22), rate: 1.0 }); break
+      case 'overheat': for (let i = 0; i < 10; i++) sm.emit(e.x, e.y + 2.5, e.z, (rnd() - 0.5) * 1.5, 2 + rnd(), (rnd() - 0.5) * 1.5, 1.2, 0.5, 1.8, 0xf0eee8, 0xf0eee8, 0.6, -0.5, 0.5); this.snd('splash', { vol: this.vol(e.x, e.z, 0.4, 22), rate: 1.8 }); break
+      case 'board': this.snd('horn', { vol: this.vol(e.x, e.z, 0.35, 30), rate: 1.5 }); for (let i = 0; i < 10; i++) sm.emit(e.x, e.y + 0.4, e.z, (rnd() - 0.5) * 5, 1, (rnd() - 0.5) * 5, 0.8, 0.8, 2, 0xcbc4b6, 0xcbc4b6, 0.5, 0, 2); break
+      case 'swap': this.snd('switch', { vol: 0.6 }); break
+      case 'spare': for (let i = 0; i < 14; i++) sm.emit(e.x, e.y + 0.5, e.z, (rnd() - 0.5) * 6, 1 + rnd() * 2, (rnd() - 0.5) * 6, 1.0, 0.8, 2.6, 0xfff0c0, 0xcbc4b6, 0.5, 0, 2); this.rings.ring(e.x, e.y, e.z, 3.5, 0xffd23a, 0.6); break
+      case 'vanish': for (let i = 0; i < 8; i++) sm.emit(e.x, e.y + 0.6, e.z, (rnd() - 0.5) * 3, 1 + rnd(), (rnd() - 0.5) * 3, 1.2, 1.2, 3.5, 0x4a4845, 0x4a4845, 0.5, 0, 1); break
+      case 'takeoff': break
+    }
+  }
+  addShake(x, z, a) { const d = this.dist(x, z); this.shake = Math.max(this.shake, a / (1 + d / 12)) }
+  confettiBurst(x, y, z, n, sp) { for (let i = 0; i < n; i++) this.pSmoke.emit(x, y, z, (Math.random() - 0.5) * sp * 2, Math.random() * sp, (Math.random() - 0.5) * sp * 2, 1.4, 0.34, 0.3, CONF[i % CONF.length], CONF[(i + 2) % CONF.length], 1, 9, 1.4, 1) }
+  fling(v, x, z, speed) {
+    const pool = v.fl.filter(o => o.parent !== this.scene)
+    const o = pool[(Math.random() * pool.length) | 0]; if (!o) return
+    const p = new THREE.Vector3(); o.getWorldPosition(p); this.debris.fling(o, new THREE.Vector3((p.x - x) * 0.8 + (Math.random() - 0.5) * 4, 5 + Math.random() * speed * 0.5, (p.z - z) * 0.8 + (Math.random() - 0.5) * 4), 12)
+  }
+  bigExplosion(e, S) {
+    const fi = this.pFire, sm = this.pSmoke, rnd = Math.random
+    this.rings.flash(e.x, e.y, e.z, 7, 0xfff3c8, 0.3); this.rings.ring(e.x, e.y - 0.8, e.z, 14, 0xffc070, 0.7, 0.9)
+    for (let i = 0; i < 26; i++) { const a = rnd() * 6.28, u = rnd() * 9; fi.emit(e.x, e.y, e.z, Math.sin(a) * u, 2 + rnd() * 9, Math.cos(a) * u, 0.7 + rnd() * 0.5, 2.2, 0.4, 0xffe08a, 0xff3a0a, 0.95, -2, 1.2) }
+    for (let i = 0; i < 40; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 24, rnd() * 20, (rnd() - 0.5) * 24, 0.9 + rnd() * 0.5, 0.3, 0.08, 0xfff0b0, 0xff8a20, 1, 22, 0.2)
+    for (let i = 0; i < 18; i++) { const a = rnd() * 6.28, u = rnd() * 5; sm.emit(e.x + Math.sin(a), e.y, e.z + Math.cos(a), Math.sin(a) * u, 3 + rnd() * 6, Math.cos(a) * u, 2.2 + rnd(), 1.6, 6.5, 0x1b1a19, 0x3a3836, 0.85, -0.5, 0.7) }
+    this.confettiBurst(e.x, e.y, e.z, 30, 10)
+    const v = this.cars.get(e.id)
+    if (v) { for (let i = 0; i < v.fl.length; i++) this.fling(v, e.x, e.z, 16)
+      for (const w of v.wheels) { const p = new THREE.Vector3(); w.spin.getWorldPosition(p); const m = w.spin; this.debris.fling(m, new THREE.Vector3((rnd() - 0.5) * 16, 8 + rnd() * 8, (rnd() - 0.5) * 16), 18); void p } }
+    this.snd('boom', { vol: this.vol(e.x, e.z, 1, 40), rate: 0.9 + rnd() * 0.2 }); this.snd('debris', { vol: this.vol(e.x, e.z, 0.6, 34), delay: 0.15 })
+    this.addShake(e.x, e.z, 1.2); this.hitStop = 0.07
+  }
+  firework(e) {
+    const fi = this.pFire, sm = this.pSmoke, rnd = Math.random, small = e.how === 'mine'
+    const cols = small ? [0xffc040, 0xff6a20] : [[0xff4a8a, 0xffd23a], [0x4ad0ff, 0xffffff], [0xa0ff5a, 0xffe14a]][(rnd() * 3) | 0]
+    this.rings.flash(e.x, e.y, e.z, small ? 3.5 : 5, 0xfff3c8, 0.22); this.rings.ring(e.x, e.y - 0.5, e.z, e.r * 1.05, cols[0], 0.55, 0.85)
+    const n = small ? 30 : 70
+    for (let i = 0; i < n; i++) { const a = rnd() * 6.28, b = Math.acos(rnd() * 2 - 1), u = (small ? 9 : 16) * (0.5 + rnd() * 0.6); fi.emit(e.x, e.y, e.z, Math.sin(b) * Math.sin(a) * u, Math.cos(b) * u + 2, Math.sin(b) * Math.cos(a) * u, 0.9 + rnd() * 0.5, 0.55, 0.12, cols[i % 2], cols[(i + 1) % 2], 1, 6, 1.3) }
+    for (let i = 0; i < 8; i++) sm.emit(e.x, e.y, e.z, (rnd() - 0.5) * 8, rnd() * 4, (rnd() - 0.5) * 8, 1.6, 1.4, 4.2, 0x5a5652, 0x7a7670, 0.6, -0.3, 1)
+    if (!small) this.confettiBurst(e.x, e.y, e.z, 20, 9)
+    this.snd(small ? 'boom2' : 'boom5', { vol: this.vol(e.x, e.z, 0.9, 40), rate: small ? 1.1 : 0.8 }); this.addShake(e.x, e.z, small ? 0.5 : 0.7)
+  }
+  // ---------------------------------------------------------------- カメラ
+  // v = { mode, yaw, pitch, car, person }
+  updateCamera(S, v, dt, alpha) {
+    const cam = this.cam, tp = new THREE.Vector3(), look = new THREE.Vector3()
+    let dist = 9.5, h = 4.7, fovT = 62, lookAhead = 6, lh = 1.3
+    if (v.mode === 'orbit') { // タイトル・観戦: 島をゆっくり回る
+      const a = this.time * 0.06 + 0.5, R = 50
+      tp.set(Math.sin(a) * R, 14, Math.cos(a) * R); look.set(0, 1.5, 0); fovT = 58
+      this.camPos.lerp(tp, Math.min(1, 3 * dt)); this.camLook.lerp(look, Math.min(1, 3 * dt)); this.focus.set(0, 0, 0)
+      cam.position.copy(this.camPos); cam.lookAt(this.camLook); cam.fov = lerp(cam.fov, fovT, 0.1); cam.updateProjectionMatrix(); this.updateSun(0, 0); return
+    }
+    let fx, fy, fz, yaw
+    if (v.mode === 'walk') { const p = v.person; fx = lerp(p.px, p.x, alpha); fy = lerp(p.py, p.y, alpha); fz = lerp(p.pz, p.z, alpha); yaw = v.yaw; dist = 6.2; h = 2.9; lookAhead = 8; lh = 1.2 }
+    else {
+      const c = v.car; fx = lerp(c.px, c.x, alpha); fy = lerp(c.py, c.y, alpha); fz = lerp(c.pz, c.z, alpha)
+      yaw = v.mode === 'gun' ? v.yaw : lerpAng(c.pyaw, c.yaw, alpha)
+      const sp = Math.hypot(c.vx, c.vz)
+      if (v.mode === 'drive') { // 車の向きと進む向きの間を見る
+        if (sp > 4) { const vy = Math.atan2(c.vx, c.vz); let d = vy - yaw; while (d > Math.PI) d -= 6.283; while (d < -Math.PI) d += 6.283; if (Math.abs(d) < 1.2) yaw += d * 0.35 }
+        dist = 9.2 + sp * 0.07; h = 4.5 + sp * 0.02; fovT = 62 + Math.min(14, sp * 0.45) + (c.boosting ? 8 : 0)
+      } else { dist = 8.6; h = 4.0; lookAhead = 24; lh = 1.6; fovT = 64 }
+    }
+    if (this.cam.aspect < 1) { const pf = 1 + (1 - this.cam.aspect) * 0.8; dist *= pf; h *= pf * 0.95 }
+    // 向きはなめらかに追う
+    if (this.camYaw === undefined || v.snap) this.camYaw = yaw
+    const k = v.mode === 'gun' || v.mode === 'walk' ? 1 : 1 - Math.exp(-5.5 * dt)
+    this.camYaw = lerpAng(this.camYaw, yaw, k)
+    const sy = Math.sin(this.camYaw), cy = Math.cos(this.camYaw)
+    // 壁や柱の手前に寄せる
+    let d = dist
+    for (; d > 3.4; d -= 0.8) { const x = fx - sy * d, z = fz - cy * d, y = fy + h * (0.55 + 0.45 * d / dist) + 0.4; if (Math.abs(x) < HALF - 0.6 && Math.abs(z) < HALF - 0.6 && !solidAtPoint(x, y, z) && y > H(x, z) + 0.6) break }
+    tp.set(fx - sy * d, fy + h * (0.55 + 0.45 * d / dist) + 0.4, fz - cy * d)
+    tp.y = Math.max(tp.y, H(tp.x, tp.z) + 1.0)
+    look.set(fx + sy * lookAhead, fy + lh, fz + cy * lookAhead)
+    if (v.snap) { this.camPos.copy(tp); this.camLook.copy(look) }
+    else { const kp = 1 - Math.exp(-(v.mode === 'gun' ? 14 : 9) * dt); this.camPos.lerp(tp, kp); this.camLook.lerp(look, 1 - Math.exp(-12 * dt)) }
+    cam.position.copy(this.camPos)
+    this.shake = Math.max(0, this.shake - dt * 2.4)
+    if (this.shake > 0.01) cam.position.add(new THREE.Vector3((Math.random() - 0.5) * this.shake * 0.5, (Math.random() - 0.5) * this.shake * 0.5, (Math.random() - 0.5) * this.shake * 0.5))
+    cam.lookAt(this.camLook)
+    cam.fov = lerp(cam.fov, fovT, 1 - Math.exp(-4 * dt)); cam.updateProjectionMatrix()
+    this.focus.set(fx, fy, fz); this.updateSun(fx, fz)
+  }
+  updateSun(x, z) { this.sun.position.set(x + this.sunOff.x, this.sunOff.y, z + this.sunOff.z); this.sun.target.position.set(x, 0, z); this.sun.target.updateMatrixWorld() }
+  project(x, y, z, out) { out.set(x, y, z).project(this.cam); return out }
+  render() { this.renderer.render(this.scene, this.cam) }
+  clearDynamic() { this.splats.clear(); this.pSmoke.clear(); this.pFire.clear(); for (const [, v] of this.cars) this.scene.remove(v.g); this.cars.clear(); this.camYaw = undefined }
+}
+const _scorch = new THREE.Color(0x1c1a18)
+const CONF = [0xff4a8a, 0xffd23a, 0x4ad0ff, 0xa0ff5a, 0xff7a2a, 0xffffff, 0xb07aff]
+const PICKC = { rocket: 0xd8372a, confetti: 0xe8b81c, mine: 0x5a6a42, oil: 0x3a3c44, repair: 0x2f9e57 }

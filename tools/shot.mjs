@@ -11,7 +11,7 @@ const ctx = await b.newContext({ viewport: { width: +w, height: +h }, deviceScal
 await muteContext(ctx)
 const p = await ctx.newPage(); const errs = []
 p.on('pageerror', e => errs.push('pageerror ' + e.message)); p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errs.push(m.type() + ' ' + m.text()) })
-await p.goto(`http://localhost:${PORT}/?${query}`)
+await p.goto(`${process.env.BASE || 'http://localhost:' + PORT + '/'}?${query}`)
 await p.waitForFunction(() => window.__bbReady, null, { timeout: 30000 }).catch(e => errs.push('notready'))
 if (script) await p.evaluate(script).catch(e => errs.push('script ' + e.message))
 const ws = String(waitMs).split(',').map(Number)

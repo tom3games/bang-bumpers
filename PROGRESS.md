@@ -10,3 +10,5 @@
 - 動いた: 5チーム×2人・3台ストック・すり鉢・坂・上の通路・柱と箱・5種の拾い物・歩き→空き車で復活・役交代（止まって3秒）
 - 調整: CPU だけの試合 tools/hsim.mjs で平均 約170秒（ダメージ係数 bullet 0.38・ram 0.5）。ブラウザ描画の呼び出し数は静的物を焼き込んで 745→約300（影込み）
 - 検査: tools/verify.mjs（キーとタッチ・CPU 戦・サイズ別の重なり）、tools/shot.mjs（撮る）、tools/q.mjs（中身を調べる）
+- 公開: https://tom3games.github.io/bang-bumpers/?v=1 （Pages built・og.png 200・音 200）。検査: Chromium は 起動・サイズ3種・PC運転/役交代/射手・スマホ運転〜歩き〜乗り直し・スマホ射手・CPU戦(seed21/23 決着)・英語 が通る、WebKit は同じ一式（CDP タッチ除く）が通る。iOS シミュレーターの Safari で CPU 戦の通し描画（爆発・HUD）を確認
+- 次: オンライン化（sim.step をサーバーで回して events と状態差分を配る）

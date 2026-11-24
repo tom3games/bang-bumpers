@@ -264,7 +264,7 @@ export class Stage {
     const og = new THREE.CircleGeometry(1, 28); og.rotateX(-Math.PI / 2)
     for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(og, new THREE.MeshStandardMaterial({ color: 0x0b0b0e, roughness: 0.05, metalness: 0.9, transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: -3 })); m.visible = false; m.receiveShadow = true; S.add(m); this.oilMs.push(m) }
     this.pickMs = []
-    const icons = { turbo: ['#f08a1e', 'bolt'], spear: ['#f08a1e', 'spear'], oil: ['#f08a1e', 'oil'], mine: ['#f08a1e', 'mine'], repair: ['#f08a1e', 'plus'], grenade: ['#1fa6cf', 'gren'], smoke: ['#1fa6cf', 'cloud'], ricochet: ['#1fa6cf', 'zig'], turret: ['#1fa6cf', 'tur'] }
+    const icons = { turbo: ['#f08a1e', 'bolt'], spear: ['#f08a1e', 'spear'], oil: ['#f08a1e', 'oil'], mine: ['#f08a1e', 'mine'], repair: ['#2f9e57', 'plus'], grenade: ['#1fa6cf', 'gren'], smoke: ['#1fa6cf', 'cloud'], ricochet: ['#1fa6cf', 'zig'], turret: ['#1fa6cf', 'tur'] }
     this.pickIcons = {}
     for (const k in icons) this.pickIcons[k] = this.iconTex(icons[k][0], icons[k][1])
     for (let i = 0; i < 32; i++) {
@@ -637,6 +637,6 @@ export class Stage {
 }
 const _scorch = new THREE.Color(0x1c1a18), _white = new THREE.Color(0xffffff)
 const CONF = [0xff4a8a, 0xffd23a, 0x4ad0ff, 0xa0ff5a, 0xff7a2a, 0xffffff, 0xb07aff]
-const PICKC = { turbo: 0xf08a1e, spear: 0xf08a1e, oil: 0xf08a1e, mine: 0xf08a1e, repair: 0xf08a1e, grenade: 0x1fa6cf, smoke: 0x1fa6cf, ricochet: 0x1fa6cf, turret: 0x1fa6cf }
+const PICKC = { turbo: 0xf08a1e, spear: 0xf08a1e, oil: 0xf08a1e, mine: 0xf08a1e, repair: 0x2f9e57, grenade: 0x1fa6cf, smoke: 0x1fa6cf, ricochet: 0x1fa6cf, turret: 0x1fa6cf }
 const ROLE_G = new Set(['grenade', 'smoke', 'ricochet', 'turret'])
 const BOXG = new THREE.BoxGeometry(1.15, 1.15, 1.15), SPHG = new THREE.SphereGeometry(0.78, 18, 14)

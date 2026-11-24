@@ -16,22 +16,22 @@ export const MAXF = 21, MAXR = 8, BOOST_MAXF = 31
 // 銃（射手が2つ選んで持ち替える）
 export const WEAPONS = {
   paint: { name: 'ペイント弾', kind: 'gun', speed: 58, dmg: 2.6, life: 1.3, cd: 0.105, mag: 36, reload: 1.7, stat: [3, 5, 3] },
-  rocket: { name: '花火ロケット', kind: 'rocket', speed: 30, dmg: 34, r: 7.5, life: 2.6, cd: 0.7, mag: 3, reload: 3.6, stat: [5, 1, 4] },
-  confetti: { name: '紙吹雪', kind: 'confetti', speed: 44, dmg: 3.1, life: 0.5, n: 9, spread: 0.17, cd: 0.6, mag: 5, reload: 2.4, stat: [4, 2, 1] },
-  spring: { name: 'バネの鉄球', kind: 'spring', speed: 34, dmg: 9, life: 2.8, cd: 0.5, mag: 6, reload: 2.4, bounces: 3, stat: [3, 2, 3] },
-  cork: { name: 'コルク砲', kind: 'cork', speed: 95, dmg: 12, life: 1.1, cd: 0.75, mag: 5, reload: 2.6, stat: [4, 2, 5] },
+  rocket: { name: '花火ロケット', kind: 'rocket', speed: 30, dmg: 27, r: 7.5, life: 2.6, cd: 0.95, mag: 3, reload: 4.2, stat: [4, 1, 4] },
+  confetti: { name: '紙吹雪', kind: 'confetti', speed: 44, dmg: 2.3, life: 0.5, n: 9, spread: 0.17, cd: 0.6, mag: 5, reload: 2.4, stat: [4, 2, 1] },
+  spring: { name: 'バネの鉄球', kind: 'spring', speed: 34, dmg: 13, life: 2.8, cd: 0.5, mag: 6, reload: 2.4, bounces: 3, stat: [4, 2, 3] },
+  cork: { name: 'コルク砲', kind: 'cork', speed: 95, dmg: 20, life: 1.1, cd: 0.8, mag: 5, reload: 2.6, stat: [5, 2, 5] },
 }
 export const WEAPON_IDS = ['paint', 'rocket', 'confetti', 'spring', 'cork']
 // 車（運転が1つ選ぶ）。dur は壊れにくさ（ダメージを割る）。mass は体当たりの重さ
 export const CAR_TYPES = [
   { id: 'std', name: 'バランス', note: 'どれも平均点。迷ったらこれ', thrUp: 2.4, thrDown: 1.9, brake: 13, roll: 0.8, yawTau: 0.14, maxF: 21, acc: 8.0, dur: 1.0, mass: 1.0, steer: 1.0, grip: 4.2, boostK: 1.0, scale: 1.0, stat: [3, 3, 3, 3] },
-  { id: 'fast', name: 'ビュン', note: '速くて軽い。壊れやすい', thrUp: 3.4, thrDown: 2.5, brake: 12, roll: 0.65, yawTau: 0.11, maxF: 25.5, acc: 11.5, dur: 0.7, mass: 0.8, steer: 0.9, grip: 3.6, boostK: 1.0, scale: 0.95, stat: [5, 1, 3, 1] },
-  { id: 'heavy', name: 'ドスン', note: '遅いけど硬くて体当たりが強い', thrUp: 1.5, thrDown: 1.2, brake: 9, roll: 0.5, yawTau: 0.26, maxF: 17.5, acc: 5.6, dur: 1.55, mass: 1.8, steer: 0.8, grip: 3.3, boostK: 0.8, scale: 1.18, stat: [1, 5, 2, 5] },
+  { id: 'fast', name: 'ビュン', note: '速くて軽い。壊れやすい', thrUp: 3.4, thrDown: 2.5, brake: 12, roll: 0.65, yawTau: 0.11, maxF: 25.5, acc: 11.5, dur: 0.7, mass: 0.8, steer: 0.9, grip: 3.6, boostK: 1.0, scale: 0.96, stat: [5, 1, 3, 1] },
+  { id: 'heavy', name: 'ドスン', note: '遅いけど硬くて体当たりが強い', thrUp: 1.5, thrDown: 1.2, brake: 9, roll: 0.5, yawTau: 0.26, maxF: 17.5, acc: 5.6, dur: 1.55, mass: 1.8, steer: 0.8, grip: 3.3, boostK: 0.8, scale: 1.1, stat: [1, 5, 2, 5] },
   { id: 'agile', name: 'ヒラリ', note: '小回りが利く。ブースト長め', thrUp: 2.7, thrDown: 2.1, brake: 13.5, roll: 0.85, yawTau: 0.08, maxF: 21, acc: 8.4, dur: 0.9, mass: 0.9, steer: 1.5, grip: 5.2, boostK: 1.5, scale: 0.97, stat: [3, 2, 5, 2] },
 ]
 // アイテム。role D=運転だけが使う・G=射手だけが使う
 export const ITEMS = {
-  turbo: { role: 'D', name: 'ターボ', ammo: 1 }, spear: { role: 'D', name: '槍', ammo: 1 }, oil: { role: 'D', name: 'オイル', ammo: 2 }, mine: { role: 'D', name: '地雷', ammo: 2 }, repair: { role: 'D', name: '修理', instant: true },
+  turbo: { role: 'D', name: 'ターボ', ammo: 1 }, spear: { role: 'D', name: '槍', ammo: 1 }, oil: { role: 'D', name: 'オイル', ammo: 2 }, mine: { role: 'D', name: '地雷', ammo: 2 }, repair: { role: 'S', name: '修理', instant: true },
   grenade: { role: 'G', name: '手榴弾', ammo: 3 }, smoke: { role: 'G', name: '煙幕', ammo: 2 }, ricochet: { role: 'G', name: '跳弾', ammo: 1 }, turret: { role: 'G', name: 'タレット', ammo: 1 },
 }
 export const ITEM_NAMES = Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.name]))
@@ -81,7 +81,8 @@ export const carById = (S, id) => S.cars.find(c => c.id === id)
 export const teamCar = (S, t) => t.car >= 0 ? carById(S, t.car) : null
 export const ev = (S, o) => S.events.push(o)
 const fwd = c => [Math.sin(c.yaw), Math.cos(c.yaw)]
-export function circles(c) { const s = Math.sin(c.yaw), co = Math.cos(c.yaw); return [[c.x + s * CAR_OFF, c.z + co * CAR_OFF], [c.x - s * CAR_OFF, c.z - co * CAR_OFF]] }
+export const carR = c => CAR_R * (1 + ((CAR_TYPES[c.type] || CAR_TYPES[0]).scale - 1) * 0.9)
+export function circles(c) { const s = Math.sin(c.yaw), co = Math.cos(c.yaw), k = carR(c) / CAR_R, o = CAR_OFF * k; return [[c.x + s * o, c.z + co * o], [c.x - s * o, c.z - co * o]] }
 export function driverIdx(t) { return t.driver }
 export function gunnerIdx(t) { return 1 - t.driver }
 
@@ -169,7 +170,8 @@ function useGunnerItem(S, t, c) {
   if (it.type === 'grenade') { S.bullets.push({ type: 'grenade', team: t.id, x: c.x + dx * 1.4, y: c.y + 2.4, z: c.z + dz * 1.4, px: c.x, py: c.y + 2.4, pz: c.z, vx: dx * 20 + c.vx * 0.6, vz: dz * 20 + c.vz * 0.6, vy: 9, life: 2.1, id: UID++ }); ev(S, { k: 'throw', team: t.id, x: c.x, y: c.y + 2.4, z: c.z }) }
   else if (it.type === 'smoke') { const px = c.x + dx * 9, pz = c.z + dz * 9; S.smokes.push({ x: px, z: pz, y: H(px, pz), r: 7.5, life: 10, team: t.id, id: UID++ }); ev(S, { k: 'smoke', team: t.id, x: px, y: H(px, pz), z: pz }) }
   else if (it.type === 'ricochet') { t.ricT = 14; ev(S, { k: 'ricochet', team: t.id, x: c.x, y: c.y, z: c.z }) }
-  else if (it.type === 'turret') { const px = c.x + dx * 4, pz = c.z + dz * 4; if (!solidAtPoint(px, c.y + 1, pz)) S.turrets.push({ team: t.id, x: px, z: pz, y: H(px, pz), yaw: c.gunYaw, hp: 40, life: 18, cd: 0.5, id: UID++ }); ev(S, { k: 'turret', team: t.id, x: px, y: H(px, pz), z: pz }) }
+  else if (it.type === 'turret') { const px = c.x + dx * 4, pz = c.z + dz * 4; if (solidAtPoint(px, c.y + 1, pz) || solidAtPoint(px, c.y + 0.3, pz) || Math.abs(px) > WORLD - 3 || Math.abs(pz) > WORLD - 3) { ev(S, { k: 'noTurret', team: t.id, x: c.x, y: c.y, z: c.z }); return }
+    S.turrets.push({ team: t.id, x: px, z: pz, y: H(px, pz), yaw: c.gunYaw, hp: 40, life: 18, cd: 0.5, id: UID++ }); ev(S, { k: 'turret', team: t.id, x: px, y: H(px, pz), z: pz }) }
   if (--it.ammo <= 0) t.iG = null
 }
 export function curWeapon(t) { return t.ws[t.wSel] }
@@ -183,16 +185,16 @@ function fire(S, t, c, inp, w, W) {
   const base = { team: t.id, x: mx, y: my, z: mz, px: mx, py: my, pz: mz, id: UID++ }
   const ric = t.ricT > 0 ? 2 : 0
   if (W.kind === 'rocket') {
-    S.bullets.push({ ...base, type: 'rocket', vx: dirx * 12 * cp, vz: dirz * 12 * cp, vy: 12 * sp_, speed: 12, yaw, life: W.life })
+    S.bullets.push({ ...base, type: 'rocket', vx: dirx * 12 * cp, vz: dirz * 12 * cp, vy: 12 * sp_, speed: 12, yaw, life: W.life, bounces: ric ? 1 : 0 })
     ev(S, { k: 'shot', w: 'rocket', team: t.id, x: mx, y: my, z: mz })
   } else if (W.kind === 'confetti') {
     for (let i = 0; i < W.n; i++) {
       const a = yaw + (S.rng() - 0.5) * W.spread * 2, v = W.speed * (0.8 + S.rng() * 0.35), pp = pitch + (S.rng() - 0.5) * 0.1
-      S.bullets.push({ ...base, id: UID++, type: 'confetti', vx: Math.sin(a) * v * Math.cos(pp), vz: Math.cos(a) * v * Math.cos(pp), vy: Math.sin(pp) * v, life: W.life, hue: i })
+      S.bullets.push({ ...base, id: UID++, type: 'confetti', vx: Math.sin(a) * v * Math.cos(pp), vz: Math.cos(a) * v * Math.cos(pp), vy: Math.sin(pp) * v, life: W.life, hue: i, bounces: ric ? 1 : 0 })
     }
     ev(S, { k: 'shot', w: 'confetti', team: t.id, x: mx, y: my, z: mz })
   } else if (W.kind === 'spring') {
-    S.bullets.push({ ...base, type: 'spring', vx: dirx * W.speed * cp + c.vx * 0.3, vz: dirz * W.speed * cp + c.vz * 0.3, vy: W.speed * sp_ + 4, life: W.life, bounces: W.bounces })
+    S.bullets.push({ ...base, type: 'spring', vx: dirx * W.speed * cp + c.vx * 0.3, vz: dirz * W.speed * cp + c.vz * 0.3, vy: W.speed * sp_ + 4, life: W.life, bounces: W.bounces + ric })
     ev(S, { k: 'shot', w: 'spring', team: t.id, x: mx, y: my, z: mz })
   } else if (W.kind === 'cork') {
     S.bullets.push({ ...base, type: 'cork', vx: dirx * W.speed * cp, vz: dirz * W.speed * cp, vy: W.speed * sp_, life: W.life, bounces: ric })
@@ -336,7 +338,7 @@ function stepBody(S, c, dt, inp, boosting) {
   const cs = circles(c)
   for (const [cx, cz] of cs) {
     const out = []
-    if (!pushOutCircle(cx, c.y, cz, CAR_R, CAR_H, out)) continue
+    if (!pushOutCircle(cx, c.y, cz, carR(c), CAR_H, out)) continue
     let best = out[0]; for (const o of out) if (o[2] > best[2]) best = o
     for (const o of out) { c.x += o[0] * o[2] * 0.9; c.z += o[1] * o[2] * 0.9 }
     const vn = c.vx * best[0] + c.vz * best[1]
@@ -373,7 +375,7 @@ function collideCars(S, dt) {
       const ca = circles(A), cb = circles(B)
       let pen = 0, nx = 0, nz = 0, ax = 0, az = 0
       for (const [px, pz] of ca) for (const [qx, qz] of cb) {
-        const dx = px - qx, dz = pz - qz, d = Math.hypot(dx, dz), p = 2 * CAR_R - d
+        const dx = px - qx, dz = pz - qz, d = Math.hypot(dx, dz), p = carR(A) + carR(B) - d
         if (p > pen && d > 1e-4) { pen = p; nx = dx / d; nz = dz / d; ax = (px + qx) / 2; az = (pz + qz) / 2 }
       }
       if (pen <= 0) continue
@@ -450,12 +452,13 @@ function updateBullets(S, dt) {
     else if (solidAtPoint(b.x, b.y, b.z)) hitK = 'obst'
     else if (b.y > 30) hitK = 'sky'
     // 反射（バネの鉄球・跳弾）
-    if (hitK && hitK !== 'sky' && (b.bounces || 0) > 0 && b.type !== 'rocket' && b.type !== 'confetti') {
+    if (hitK && hitK !== 'sky' && (b.bounces || 0) > 0) {
       b.bounces--
-      if (hitK === 'ground') { b.vy = Math.abs(b.vy) * (b.type === 'spring' ? 0.9 : 0.8) + (b.type === 'spring' ? 3 : 0) }
+      if (hitK === 'ground') { b.vy = Math.abs(b.vy) * (b.type === 'spring' ? 0.9 : 0.8) + (b.type === 'spring' ? 3 : 0); if (b.type === 'rocket') b.yaw += 0 }
       else {
         b.x = b.px; b.y = b.py; b.z = b.pz
         if (Math.abs(b.px + b.vx * dt) > WORLD || solidAtPoint(b.px + b.vx * dt, b.py, b.pz)) b.vx = -b.vx; else b.vz = -b.vz
+        if (b.type === 'rocket') b.yaw = Math.atan2(b.vx, b.vz)
         if (Math.abs(b.pz + b.vz * dt) > WORLD) b.vz = -b.vz
       }
       ev(S, { k: 'bounce', x: b.x, y: b.y, z: b.z })
@@ -465,7 +468,7 @@ function updateBullets(S, dt) {
       if (c.team === b.team && c.team >= 0) continue
       if (b.y < c.y - 0.3 || b.y > c.y + 2.5) continue
       const cs = circles(c)
-      for (const [cx, cz] of cs) if (segCircle(b.px, b.pz, b.x, b.z, cx, cz, HITR.car) >= 0) { hitK = 'car'; hitObj = c; break }
+      for (const [cx, cz] of cs) if (segCircle(b.px, b.pz, b.x, b.z, cx, cz, carR(c) + 0.35) >= 0) { hitK = 'car'; hitObj = c; break }
       if (hitK) break
     }
     if (!hitK) for (const p of S.people) {
@@ -483,7 +486,7 @@ function updateBullets(S, dt) {
         const dmg = b.type === 'paint' ? WEAPONS.paint.dmg : b.type === 'confetti' ? WEAPONS.confetti.dmg : b.type === 'spring' ? WEAPONS.spring.dmg : b.type === 'cork' ? WEAPONS.cork.dmg : b.dmg || 2.6
         if (hitK === 'car') {
           const c = hitObj; if (c.alive) { const d = hurt(S, c, dmg, b.team, b.x, b.z, 'bullet'); if (d && b.team >= 0) S.teams[b.team].stats.hits++ }
-          const m = Math.hypot(b.vx, b.vz) || 1; c.vx += b.vx / m * (b.type === 'cork' || b.type === 'spring' ? 0.9 : 0.12); c.vz += b.vz / m * (b.type === 'cork' || b.type === 'spring' ? 0.9 : 0.12)
+          const m = Math.hypot(b.vx, b.vz) || 1; c.vx += b.vx / m * (b.type === 'cork' ? 1.6 : b.type === 'spring' ? 3.4 : 0.12); c.vz += b.vz / m * (b.type === 'cork' ? 1.6 : b.type === 'spring' ? 3.4 : 0.12)
         } else if (hitK === 'person') {
           const t = S.teams[hitObj.team]; t.footHp -= dmg * 1.4; t.footLast = { team: b.team, t: S.t }; if (b.team >= 0) S.teams[b.team].stats.hits++
         } else if (hitK === 'turret') { hitObj.hp -= dmg * 1.5; if (b.team >= 0) S.teams[b.team].stats.hits++ }
@@ -705,7 +708,7 @@ export function assistAim(S, car, yaw, cone = 0.14, range = 70) {
     const ax = c.x + c.vx * lead - car.x, az = c.z + c.vz * lead - car.z
     const a = Math.atan2(ax, az), dv = angDiff(a, yaw)
     if (Math.abs(dv) > cone + 1.5 / d) continue
-    if (!lineClear(car.x, my, car.z, c.x, c.y + 1.2, c.z)) continue
+    if (!lineClear(car.x, my, car.z, c.x, c.y + 1.2, c.z) || smokeBlocks(S, car.x, car.z, c.x, c.z)) continue
     if (Math.abs(dv) + d * 0.0015 < bs) { bs = Math.abs(dv) + d * 0.0015; best = { c, yaw: a, d, pitch: Math.atan2(c.y + 1.2 - my, d) } }
   }
   return best

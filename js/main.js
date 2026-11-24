@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js'
 import { cleanName, cpuNames, NAME_MAX } from './names.js'
+import { EngineMix } from './engine.js'
 import { makeInputs } from './cpu.js'
 import { Stage } from './stage.js'
 import { H, HALF, WORLD, BOXES, POLES, BOWL, DECK, RAMPS, SPARE_SPOTS } from './arena.js'
@@ -25,9 +26,16 @@ const SND = {
   hitl: ['snd/hitl1.mp3', 'snd/hitl2.mp3', 'snd/hitl3.mp3'], boom: ['snd/boom1.mp3', 'snd/boom2.mp3', 'snd/boom3.mp3'], boom2: ['snd/boom2.mp3'], boom5: ['snd/boom5.mp3'], debris: ['snd/debris1.mp3', 'snd/debris2.mp3'],
   thud: ['snd/thud.mp3'], whoosh: ['snd/jet.mp3'], spring: ['snd/spring1.mp3', 'snd/spring2.mp3', 'snd/spring3.mp3'], shot: ['snd/shot1.mp3', 'snd/shot2.mp3'], paper: ['snd/paper1.mp3', 'snd/paper2.mp3'], plop: ['snd/plop1.mp3', 'snd/plop2.mp3'],
   splash: ['snd/splash1.mp3'], bell: ['snd/bell.mp3'], repair: ['snd/repair1.mp3'], horn: ['snd/horn.mp3'], latch: ['snd/latch.mp3'], pin: ['snd/pin.mp3'], switch: ['snd/switch1.mp3'],
-  roll: ['snd/roll1.mp3', 'snd/roll2.mp3'], punch: ['snd/punch1.mp3', 'snd/punch2.mp3'], tick: ['snd/tick.mp3'], win: ['snd/win.mp3'], lose: ['snd/lose.mp3'], step: ['snd/step1.mp3', 'snd/step2.mp3'],
+  eng: ['snd/eng_idle.wav', 'snd/eng_mid.wav', 'snd/eng_high.wav'], roll: ['snd/roll1.mp3', 'snd/roll2.mp3'], punch: ['snd/punch1.mp3', 'snd/punch2.mp3'], tick: ['snd/tick.mp3'], win: ['snd/win.mp3'], lose: ['snd/lose.mp3'], step: ['snd/step1.mp3', 'snd/step2.mp3'],
 }
 Snd.def(SND)
+const engine = new EngineMix()
+let bgmOn = false
+function bgm(v, fade = 1.4) {
+  if (!Snd.ctx) return
+  if (!bgmOn) { bgmOn = true; Snd.loop('bgm', 'snd/bgm_suno.mp3', v, 1.5); return }
+  const l = Snd.loops.bgm; if (l && l.g) { const t = Snd.ctx.currentTime; l.g.gain.cancelScheduledValues(t); l.g.gain.setValueAtTime(l.g.gain.value, t); l.g.gain.linearRampToValueAtTime(v, t + fade); l.vol = v }
+}
 const sfxLast = {}
 const playSnd = (name, o = {}) => { if ((o.vol ?? 1) < 0.035) return; const now = performance.now(); if (now - (sfxLast[name] || 0) < 28) return; sfxLast[name] = now; Snd.play(name, o) }
 
@@ -54,12 +62,12 @@ addEventListener('keydown', e => {
   if (e.code in WSEL_KEYS) K.wsel = WSEL_KEYS[e.code]
   if (e.code === 'KeyQ') K.swap = true
   if (e.code === 'KeyM') toggleMute()
-  Snd.init()
+  Snd.init(); if (phase === 'title') bgm(0.26)
 })
 addEventListener('keyup', e => { const m = KEYMAP[e.code]; if (m) K.keys[m] = false })
 addEventListener('blur', () => { K.keys = {}; K.fire = false; K.mouseDown = false })
 const view = $('view')
-view.addEventListener('mousedown', e => { if (e.button === 0) { K.mouseDown = true; Snd.init(); if (phase === 'play' && !document.pointerLockElement && !touchy && view.requestPointerLock) { try { const pr = view.requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}) } catch (er) {} } } })
+view.addEventListener('mousedown', e => { if (e.button === 0) { K.mouseDown = true; Snd.init(); if (phase === 'title') bgm(0.26); if (phase === 'play' && !document.pointerLockElement && !touchy && view.requestPointerLock) { try { const pr = view.requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}) } catch (er) {} } } })
 addEventListener('mouseup', e => { if (e.button === 0) K.mouseDown = false })
 addEventListener('mousemove', e => {
   K.mx = e.clientX / innerWidth * 2 - 1
@@ -181,10 +189,18 @@ function buildPrep() {
       applyLoadout(); markPrep(); playSnd('switch', { vol: 0.6 })
     }))
   }
-  markPrep(); refreshPartner()
+  markPrep(); refreshPartner(); comboHint()
+}
+function comboHint() {
+  const el = $('pcombo'); if (!el) return
+  if (S.teams[0].driver === 0) { const c = CAR_TYPES[selCar]; el.textContent = L(['', '足は速いが、当たり負けしやすい', '遅いが、体当たりで押し勝てる', '小回りで、すり抜けて戦える'][selCar] || L('どこにでも合う標準の車', ''), ''); if (!selCar) el.textContent = L('クセのない標準の車', 'A standard car'); void c; return }
+  const [a, b] = selWeapons.map(id => WEAPONS[id].stat[2]), w = selWeapons
+  el.textContent = L(Math.abs(a - b) >= 2 ? `${a > b ? '' : ''}近くと遠くをカバーできる組み合わせ` : (a + b >= 8 ? '遠くの敵を狙う組み合わせ' : a + b <= 4 ? '近づいてきた敵に強い組み合わせ' : '中くらいの距離で戦う組み合わせ'), 'Combo')
+  void w
 }
 function markPrep() {
   const drive = S.teams[0].driver === 0
+  comboHint()
   document.querySelectorAll('#pcards .card').forEach(el => {
     if (drive) el.classList.toggle('sel', +el.dataset.i === selCar)
     else { const k = selWeapons.indexOf(el.dataset.id); el.classList.toggle('sel', k >= 0); const b = el.querySelector('.slot b'); if (b) b.textContent = k + 1 }
@@ -210,19 +226,19 @@ function startMatch(role) {
   boardCache = ''; $('feed').innerHTML = ''; $('msg').textContent = ''
   hintT = 0; hintShown = {}
   buildPrep()
-  Snd.init(); Snd.loop('bgm', 'snd/bgm.mp3', 0.26, 1.2); Snd.loop('amb', 'snd/amb1.mp3', 0.1, 1); Snd.loop('eng', 'snd/engine.mp3', 0.0001, 0.3)
+  Snd.init(); bgm(0.26); Snd.loop('amb', 'snd/amb1.mp3', 0.08, 1)
   playSnd('switch', { vol: 0.7 })
   if (window.__bbOnStart) window.__bbOnStart()
 }
 function toPlay() {
-  phase = 'play'; $('prep').hidden = true; $('hud').hidden = false; snapCam = true
+  phase = 'play'; $('prep').hidden = true; $('hud').hidden = false; snapCam = true; bgm(0.17, 2.5)
   const c = S.cars.find(q => q.team === 0); if (c) aimYaw = S.teams[0].driver === 1 ? c.yaw : aimYaw
 }
 function toTitle() {
   phase = 'title'; human = false
   S = createState(seedBase + (++matchNo) * 31, { humanTeam: -1, noCountdown: true }); stage.clearDynamic()
   $('title').hidden = false; $('result').hidden = true; $('hud').hidden = true
-  Snd.loop('eng', null)
+  engine.clear(); bgm(0.26)
 }
 $('goDrive').addEventListener('click', () => startMatch('drive'))
 $('goShoot').addEventListener('click', () => startMatch('shoot'))
@@ -239,6 +255,8 @@ function showResult(rank) {
   const t = S.teams[0], st = t.stats
   $('rkN').textContent = rank; $('rkU').textContent = L('位', rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th')
   const V = [['最後まで走りきった', 'Last one rolling'], ['あと一歩で頂点だった', 'One hit from the top'], ['ボロボロだけど生きていた', 'Dented but alive'], ['早めに放り出された', 'Thrown out early'], ['最初の被害者になった', 'First one to go']][rank - 1]
+  { const sc = id => S.teams[id].stock * 2 + S.teams[id].kills, lead = S.ranking.length ? S.ranking[0] : -1
+    if (rank === 2 && lead >= 0 && sc(0) < sc(lead) - 1) V[0] = 'しぶとく最後まで残った', V[1] = 'Hung on to the end' }
   $('rkV').textContent = L(...V)
   const order = S.ranking.length ? S.ranking : [...S.teams].sort((a, b) => (b.out ? -1000 + b.outT : 1000 + b.stock * 100 + b.kills * 3) - (a.out ? -1000 + a.outT : 1000 + a.stock * 100 + a.kills * 3)).map(x => x.id)
   $('rkList').innerHTML = order.map((id, i) => { const tm = S.teams[id]; return `<li class="${id === 0 ? 'me' : ''}" style="--tc:${hex(TEAM_COLORS[id])}"><b>${i + 1}</b><i></i><span>${tname(id)}${id === 0 ? L('（あなた）', ' (you)') : ''}</span><em>${tm.kills} ${L('撃破', 'KO')}</em></li>` }).join('')
@@ -246,7 +264,7 @@ function showResult(rank) {
   $('rkSt').textContent = L(`撃った ${st.shots} 発・当たった ${st.hits} 発（${acc}%）・体当たり ${st.rams} 回・拾った物 ${st.pick} 個`, `Shots ${st.shots} · hits ${st.hits} (${acc}%) · rams ${st.rams} · pickups ${st.pick}`)
   $('result').classList.toggle('win', rank === 1)
   $('result').hidden = false; $('hud').hidden = true; $('prep').hidden = true; phase = 'result'
-  playSnd(rank <= 2 ? 'win' : 'lose', { vol: 0.9 }); Snd.duck(0.3, 3)
+  playSnd(rank <= 2 ? 'win' : 'lose', { vol: 0.9 }); Snd.duck(0.3, 3); engine.clear(); bgm(0.26)
   document.exitPointerLock?.()
   window.__bbDone = { tMatch: S.tMatch, winner: S.winner, wrecks: S.wrecks, teams: S.teams.map(t => ({ kills: t.kills })), rank }
   if (window.__bbOnResult) window.__bbOnResult(rank)
@@ -280,7 +298,7 @@ function onEvents() {
       }
       case 'out': { feed(L(`<b style="color:${hex(TEAM_COLORS[e.team])}">${tname(e.team)}</b> 脱落`, `<b style="color:${hex(TEAM_COLORS[e.team])}">${tname(e.team)}</b> is out`), TEAM_COLORS[e.team]); if (e.team === 0) { resultAt = S.t + 2.4; say(L('脱落', 'OUT'), false, 2200) } break }
       case 'swap': say(L(S.teams[0].driver === 0 ? '運転になった' : '射手になった', S.teams[0].driver === 0 ? 'You drive now' : 'You shoot now'), true, 1200); if (S.teams[0].driver === 1) { const c = S.cars.find(q => q.id === S.teams[0].car); if (c) aimYaw = c.gunYaw } break
-      case 'pickup': if (e.team === 0) say(L(ITEM_NAMES[e.type], e.type.toUpperCase()), true, 900, ITEMS[e.type] && ITEMS[e.type].role === 'D' ? L('運転のアイテム', 'Driver item') : L('射手のアイテム', 'Shooter item')); break
+      case 'pickup': if (e.team === 0) say(L(ITEM_NAMES[e.type], e.type.toUpperCase()), true, 900, ITEMS[e.type] && ITEMS[e.type].role === 'D' ? L('運転のアイテム', 'Driver item') : ITEMS[e.type] && ITEMS[e.type].role === 'G' ? L('射手のアイテム', 'Shooter item') : ''); break
       case 'repair': if (e.team === 0) say(L('修理', 'REPAIR'), true, 900); break
       case 'overheat': if (e.team === 0) say(L('熱い！', 'OVERHEAT'), true, 900); break
       case 'board': if (e.team === 0) { say(L('復活', 'BACK IN'), true, 1000); const c = S.cars.find(q => q.id === e.id); if (c) { aimYaw = c.yaw; snapCam = true } } break
@@ -293,9 +311,9 @@ function onEvents() {
 let boardCache = '', hintT = 0, hintShown = {}
 function updateBoard() {
   const order = [...S.teams].sort((a, b) => (b.out ? -1000 + b.outT : 1000 + b.stock * 100 + b.kills * 3) - (a.out ? -1000 + a.outT : 1000 + a.stock * 100 + a.kills * 3))
-  const key = order.map(t => `${t.id}${t.stock}${t.kills}${t.out ? 1 : 0}`).join(',')
+  const key = order.map(t => `${t.id}${t.stock}${t.kills}${t.out ? 1 : 0}${tname(t.id)}`).join(',')
   if (key === boardCache) return; boardCache = key
-  $('board').innerHTML = order.map(t => { let pips = ''; for (let i = 0; i < STOCK; i++) pips += `<u class="${i < t.stock ? '' : 'x'}"></u>`; return `<li class="${t.id === 0 ? 'me' : ''} ${t.out ? 'out' : ''}" style="--tc:${hex(TEAM_COLORS[t.id])}"><i></i><span class="st">${pips}</span><span class="k">${t.kills}</span></li>` }).join('')
+  $('board').innerHTML = order.map(t => { let pips = ''; for (let i = 0; i < STOCK; i++) pips += `<u class="${i < t.stock ? '' : 'x'}"></u>`; return `<li class="${t.id === 0 ? 'me' : ''} ${t.out ? 'out' : ''}" style="--tc:${hex(TEAM_COLORS[t.id])}"><i></i><em>${[...tname(t.id)].slice(0, 4).join('')}</em><span class="st">${pips}</span><span class="k">${t.kills}</span></li>` }).join('')
 }
 const radar = $('radar').getContext('2d')
 function drawRadar(cx, cz, yaw) {
@@ -448,11 +466,9 @@ function frame(now) {
     const ref = c || (t && t.p[0])
     if (ref) drawRadar(ref.x, ref.z, c ? stage.camYaw : stage.camYaw)
     updateMarks()
-    // エンジン音
-    const eng = Snd.loops && Snd.loops.eng
-    if (eng && eng.node && c) { const sp = Math.hypot(c.vx, c.vz), mx = CAR_TYPES[c.type].maxF; eng.node.playbackRate.value = 0.5 + Math.pow(Math.min(1.3, sp / mx), 0.85) * 1.5 + c.thr * 0.22 + (c.boosting ? 0.2 : 0);
-      if (c.slip > 4.2 && !c.air && sp > 6 && performance.now() - (window.__scrub || 0) > 380) { window.__scrub = performance.now(); playSnd('roll', { vol: Math.min(0.5, c.slip * 0.06), rate: 1.7 + Math.random() * 0.3 }) } eng.g.gain.value = muted ? 0 : (S.phase === 'play' ? 0.14 + Math.min(0.22, sp / MAXF * 0.22) : 0.1) }
-    else if (eng && eng.g) eng.g.gain.value = 0.0001
+    engine.update(S, dt, c, stage.camYaw, muted, S.phase === 'play' && !S.over)
+    { const sp = c ? Math.hypot(c.vx, c.vz) : 0
+      if (c && c.slip > 4.2 && !c.air && sp > 6 && performance.now() - (window.__scrub || 0) > 380) { window.__scrub = performance.now(); playSnd('roll', { vol: Math.min(0.5, c.slip * 0.06), rate: 1.7 + Math.random() * 0.3 }) } }
     drawWind(c ? Math.hypot(c.vx, c.vz) / CAR_TYPES[c.type].maxF : 0, !!(c && c.boosting), role === 'drive' || role === 'shoot')
     if (phase === 'play' && S.over && !shownResult) { if (!resultAt) resultAt = S.t + 1.2; if (S.t >= resultAt) { const rk = S.ranking.indexOf(0) + 1; showResult(rk) } }
     if (t && t.out && !shownResult && resultAt && S.t >= resultAt) { showResult(S.teams.filter(q => !q.out).length + 1) }
@@ -466,7 +482,7 @@ function frame(now) {
 // ------------------------------------------------------------ 読み込み
 async function boot() {
   $('loadbar').style.width = '35%'
-  await Promise.race([Snd.prefetch(['snd/bgm.mp3', 'snd/amb1.mp3', 'snd/engine.mp3']), new Promise(r => setTimeout(r, 5000))])
+  await Promise.race([Snd.prefetch(['snd/bgm_suno.mp3', 'snd/amb1.mp3']), new Promise(r => setTimeout(r, 5000))])
   $('loadbar').style.width = '100%'
   await new Promise(r => setTimeout(r, 160))
   $('loading').classList.add('off'); setTimeout(() => $('loading').remove(), 600)

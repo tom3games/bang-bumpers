@@ -2,7 +2,7 @@
 import { createState, step, DT, CAR_TYPES } from '../js/sim.js'
 const run = (type, script, secs, setup) => {
   const S = createState(3, { noCountdown: true, prepSec: 0 }); const t = S.teams[0], c = S.cars.find(q => q.id === t.car)
-  c.type = type; c.x = 99; c.z = 100; c.y = 0; c.yaw = Math.PI; c.vx = c.vz = 0; for (const o of S.teams) if (o.id) o.out = true
+  c.type = type; c.x = 95.5; c.z = 104; c.y = 0; c.yaw = Math.PI; c.vx = c.vz = 0; for (const o of S.teams) if (o.id) o.out = true
   setup && setup(c, S)
   const rec = []
   for (let i = 0; i < secs * 60; i++) { const tt = i / 60; const inp = script(tt, c); step(S, { 0: { aim: 0, ...inp } }, DT); S.events.length = 0; rec.push({ t: tt, sp: Math.hypot(c.vx, c.vz), yaw: c.yaw, c: { ...c } }) }
@@ -10,7 +10,7 @@ const run = (type, script, secs, setup) => {
 }
 const fmt = x => x.toFixed(2)
 for (const [i, T] of CAR_TYPES.entries()) {
-  const acc = run(i, () => ({ throttle: 1, steer: 0 }), 5)
+  const acc = run(i, () => ({ throttle: 1, steer: 0 }), 5.8)
   const t80 = acc.find(r => r.sp >= T.maxF * 0.8)?.t
   const t50 = acc.find(r => r.sp >= T.maxF * 0.5)?.t
   const coast = run(i, (t) => ({ throttle: 0, steer: 0 }), 12, c => { c.vz = -T.maxF * 0.95; c.vx = 0 })

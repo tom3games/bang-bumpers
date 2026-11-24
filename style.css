@@ -276,3 +276,7 @@ body.r-shoot .rb.swap{right:calc(var(--sr) + 28px);bottom:calc(var(--sb) + var(-
 body.r-drive .rb.item{right:calc(var(--sr) + 98px);bottom:calc(var(--sb) + var(--inapp) + 160px)}
 body.r-drive .rb.swap{right:calc(var(--sr) + 30px);bottom:calc(var(--sb) + var(--inapp) + 210px)}
 body.touch #wslots{flex-direction:column;gap:4px}body.touch .ws{min-width:108px}
+#pcombo{margin-top:4px;font-size:12px;font-weight:700;color:#e9e4d4;letter-spacing:.02em}
+#board li{grid-template-columns:6px auto 1fr auto}
+#board li em{font-style:normal;font:700 10px var(--jp);color:#d8d3c4;white-space:nowrap;max-width:44px;overflow:hidden}
+#board li .st{justify-self:end}

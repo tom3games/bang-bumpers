@@ -1,14 +1,14 @@
 // CPU の頭。運転役・射手役・歩きを別々に作り、makeInputs で人の入力と混ぜて チームごとの入力 にする。
 // 状態(S)は読むだけ。サーバーに移しても同じ関数がそのまま動く。
-import { H, WORLD, HALF, DOORS, pushOutCircle, lineClear, clamp } from './arena.js?v=3'
-import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=3'
+import { H, WORLD, pushOutCircle, lineClear, clamp } from './arena.js?v=4'
+import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=4'
 
 const MEM = new WeakMap()
 const mem = t => { let m = MEM.get(t); if (!m) { m = { stuckT: 0, revT: 0, lx: 0, lz: 0, lt: 0, tgt: -1, tgtT: 0, gtgt: -1, gT: 0, noise: 0, burst: 0, rest: 0.5, aim: null, side: 1, seed: t.id * 7.13 + 1, walkStuck: 0, wlx: 0, wlz: 0, wt: 0, wside: 1, dropT: 3 + t.id }; MEM.set(t, m) } return m }
 export const STYLE = ['flank', 'rammer', 'circler', 'rammer', 'circler']
 
 function blocked(S, x, z, y, self) {
-  if (Math.abs(x) > WORLD - 2.2 || Math.abs(z) > WORLD - 2.2) return true
+  if (x * x + z * z > (WORLD - 3) * (WORLD - 3)) return true
   if (H(x, z) - y > 0.5) return true
   const out = []
   if (pushOutCircle(x, y, z, CAR_R + 0.35, 1.6, out)) return true
@@ -86,14 +86,6 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
       boost = d > 28
     }
   } else { gx = 0; gz = 0; mode = 'idle'; want = 0.6 }
-  // 建屋の中と外をまたぐ時は、いちばん近い出入口を通る
-  { const inH = (x, z) => Math.abs(x) < HALF - 1.5 && Math.abs(z) < HALF - 1.5
-    if (inH(c.x, c.z) !== inH(gx, gz) && mode !== 'idle') {
-      const doors = [...DOORS.S.map(x => [x, HALF, 0, 1]), ...DOORS.E.map(z => [HALF, z, 1, 0]), ...DOORS.W.map(z => [-HALF, z, -1, 0])]
-      let best = null, bd = 1e9
-      for (const [dx, dz, nx, nz] of doors) { const d = Math.hypot(dx - c.x, dz - c.z) + Math.hypot(dx - gx, dz - gz); if (d < bd) { bd = d; best = [dx, dz, nx, nz] } }
-      if (best) { const [dx, dz, nx, nz] = best, out = !inH(c.x, c.z), near = Math.hypot(dx - c.x, dz - c.z) < 13, s = near ? (out ? -14 : 14) : (out ? 10 : -10); gx = dx + nx * s; gz = dz + nz * s }
-    } }
   let goal = Math.atan2(gx - c.x, gz - c.z)
   // よける: 目標の向きから左右にずらして一番近い空いた向き
   const L = 6 + Math.max(0, sp) * 0.5
@@ -238,7 +230,7 @@ export function makeInputs(S, dt, human) {
     const humanDrives = isH && t.driver === 0, humanGuns = isH && t.driver === 1
     const dr = humanDrives ? human.drive : cpuDrive(S, t, c, dt, humanGuns ? c.gunYaw : null)
     const gn = humanGuns ? human.gun : cpuGun(S, t, c, dt)
-    Object.assign(o, { throttle: dr.throttle, steer: dr.steer, boost: dr.boost, hb: !!dr.hb, unstick: !!dr.unstick, aim: gn.aim, fire: gn.fire, reload: gn.reload, assist: gn.assist, wsel: gn.wsel, wswap: !!(humanGuns && human.wswap), useD: humanDrives ? !!human.use : !!dr.useD, useG: humanGuns ? !!human.use : !!gn.useG, swap: !!(isH && human.swap) })
+    Object.assign(o, { throttle: dr.throttle, steer: dr.steer, boost: dr.boost, hb: !!dr.hb, unstick: !!dr.unstick, aim: gn.aim, fire: gn.fire, reload: gn.reload, assist: gn.assist, aimPitch: gn.aimPitch, wsel: gn.wsel, wswap: !!(humanGuns && human.wswap), useD: humanDrives ? !!human.use : !!dr.useD, useG: humanGuns ? !!human.use : !!gn.useG, swap: !!(isH && human.swap) })
     out[t.id] = o
   }
   return out

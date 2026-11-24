@@ -1,6 +1,7 @@
 // 絵はすべてその場で描く（画像ファイルなし）。廃工場のコンクリート・壁・木箱・鉄板
 import * as THREE from 'three'
-import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS } from './arena.js?v=3'
+import { WORLD, BOWL, RAMPS, TEAM_SPAWNS } from './arena.js?v=4'
+const HALF = WORLD
 
 function rnd(seed) { let a = seed; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')] }
@@ -161,73 +162,81 @@ function rrect(g, x0, z0, x1, z1, r) { g.beginPath(); g.moveTo(x0 + r, z0); g.li
 export function floorTint() {
   const S = 512, [c, g] = canvas(S, S), k = S / (WORLD * 2), R = rnd(12)
   const X = x => (x + WORLD) * k, Z = z => (z + WORLD) * k
-  g.fillStyle = '#5a5b5d'; g.fillRect(0, 0, S, S)                                    // ヤードのアスファルト
-  for (let i = 0; i < 60; i++) { const x = R() * S, y = R() * S, r = (6 + R() * 22) * k, gr = g.createRadialGradient(x, y, 0, x, y, r); const m = R(); gr.addColorStop(0, m < 0.4 ? 'rgba(122,104,78,0.75)' : m < 0.6 ? 'rgba(86,104,60,0.55)' : 'rgba(40,40,42,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) } // 砂利・草・黒いしみ
-  g.fillStyle = '#44464a'; rrect(g, X(-108), Z(-108), X(108), Z(108), 24 * k); g.fill()  // 外周路
-  g.fillStyle = '#58595c'; rrect(g, X(-90), Z(-90), X(90), Z(90), 8 * k); g.fill()
-  for (let i = 0; i < 40; i++) { const x = R() * S, y = R() * S, r = (4 + R() * 10) * k, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(100,90,72,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) }
-  g.fillStyle = '#8f8d87'; g.fillRect(X(-HALF), Z(-HALF), HALF * 2 * k, HALF * 2 * k)  // 建屋の床（明るいコンクリート）
-  g.fillStyle = '#7e7c77'; g.fillRect(X(70), Z(-104), 40 * k, 34 * k)                  // クレーン下の舗装
+  g.fillStyle = '#1c1d1f'; g.fillRect(0, 0, S, S)
+  g.fillStyle = '#5c5f63'; g.beginPath(); g.arc(X(0), Z(0), WORLD * k, 0, 7); g.fill()                // アスファルト
+  for (let i = 0; i < 90; i++) { const a = R() * 6.283, d = Math.sqrt(R()) * (WORLD - 4), x = X(Math.sin(a) * d), y = Z(Math.cos(a) * d), r = (4 + R() * 16) * k, gr = g.createRadialGradient(x, y, 0, x, y, r); const m = R(); gr.addColorStop(0, m < 0.5 ? 'rgba(30,30,32,0.55)' : m < 0.8 ? 'rgba(96,92,86,0.40)' : 'rgba(70,64,54,0.4)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) }
+  // 走る道筋はゴムがのって黒い
+  for (const rr of [32, 62, 84]) { g.strokeStyle = 'rgba(28,28,30,0.35)'; g.lineWidth = 9 * k; g.beginPath(); g.arc(X(0), Z(0), rr * k, 0, 7); g.stroke() }
+  // 投光器の明るい所（外周の12本が内向きに照らす）
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283, x = X(Math.sin(a) * 78), y = Z(Math.cos(a) * 78), r = 52 * k, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(255,238,205,0.34)'); gr.addColorStop(1, 'rgba(255,238,205,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t
 }
 export function floorPaint(size = 2048) {
   const [c, g] = canvas(size, size), R = rnd(31), k = size / (WORLD * 2)
   const X = x => (x + WORLD) * k, Z = z => (z + WORLD) * k
-  const stripes = (clipFn, col2, s) => { g.save(); clipFn(); g.fillStyle = '#e8b81c'; g.fillRect(0, 0, size, size); g.fillStyle = col2; for (let i = -size; i < size * 2; i += s * 2 * k) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + s * k, 0); g.lineTo(i + s * k - size, size); g.lineTo(i - size, size); g.fill() } g.restore() }
-  // 建屋の継ぎ目と黄黒のふち、すり鉢の輪
-  g.strokeStyle = 'rgba(40,38,34,0.55)'; g.lineWidth = Math.max(1, k * 0.09)
-  for (let v = -HALF; v <= HALF; v += 10) { g.beginPath(); g.moveTo(X(v), Z(-HALF)); g.lineTo(X(v), Z(HALF)); g.stroke(); g.beginPath(); g.moveTo(X(-HALF), Z(v)); g.lineTo(X(HALF), Z(v)); g.stroke() }
-  stripes(() => { g.beginPath(); g.rect(X(-HALF + 3), Z(-HALF + 3), (HALF - 3) * 2 * k, (HALF - 3) * 2 * k); g.rect(X(-HALF + 3.5), Z(-HALF + 3.5), (HALF - 3.5) * 2 * k, (HALF - 3.5) * 2 * k); g.clip('evenodd') }, '#1d1c1a', 1.6)
-  stripes(() => { g.beginPath(); g.arc(X(0), Z(0), BOWL.r * k + 0.4 * k, 0, 7); g.arc(X(0), Z(0), BOWL.r * k - 0.4 * k, 0, 7, true); g.clip('evenodd') }, '#1d1c1a', 1.4)
-  g.strokeStyle = 'rgba(235,232,222,0.75)'; g.lineWidth = k * 0.18
-  for (const r of [6, 12]) { g.beginPath(); g.arc(X(0), Z(0), r * k, 0, 7); g.stroke() }
-  g.fillStyle = 'rgba(30,28,25,0.6)'; g.beginPath(); g.arc(X(0), Z(0), 3.2 * k, 0, 7); g.fill()
-  // 出入口の注意線
-  g.fillStyle = 'rgba(232,184,28,0.9)'
-  for (const x of DOORS.S) g.fillRect(X(x - 7), Z(HALF - 1.2), 14 * k, 0.6 * k)
-  for (const z of DOORS.E) { g.fillRect(X(HALF - 1.2), Z(z - 7), 0.6 * k, 14 * k); g.fillRect(X(-HALF + 0.6), Z(z - 7), 0.6 * k, 14 * k) }
+  const ring = (r, w, col, dash) => { g.save(); g.strokeStyle = col; g.lineWidth = w * k; if (dash) g.setLineDash(dash.map(d => d * k)); g.beginPath(); g.arc(X(0), Z(0), r * k, 0, 7); g.stroke(); g.restore() }
+  // すり鉢のふち: 黄黒のはっきりした輪（落ちる所の目印）
+  { g.save(); g.beginPath(); g.arc(X(0), Z(0), (BOWL.r + 0.5) * k, 0, 7); g.arc(X(0), Z(0), (BOWL.r - 0.5) * k, 0, 7, true); g.clip('evenodd'); g.fillStyle = '#c9a233'; g.fillRect(0, 0, size, size); g.fillStyle = '#1a1917'; const s = 1.3 * k; for (let i = -size; i < size * 2; i += s * 2) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + s, 0); g.lineTo(i + s - size, size); g.lineTo(i - size, size); g.fill() } g.restore() }
+  ring(30, 0.25, 'rgba(225,222,212,0.75)', [3, 3]); ring(60, 0.25, 'rgba(225,222,212,0.7)', [4, 4]); ring(88, 0.3, 'rgba(225,222,212,0.75)')
+  // 放射状のレーン線（点線）
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; g.save(); g.strokeStyle = 'rgba(210,206,196,0.55)'; g.lineWidth = 0.22 * k; g.setLineDash([2.5 * k, 3.5 * k]); g.beginPath(); g.moveTo(X(Math.sin(a) * (BOWL.r + 3)), Z(Math.cos(a) * (BOWL.r + 3))); g.lineTo(X(Math.sin(a) * 86), Z(Math.cos(a) * 86)); g.stroke(); g.restore() }
+  // 壁ぎわの赤白の縁石帯と白線
+  ring(97.3, 1.6, 'rgba(200,196,186,0.9)'); { for (let i = 0; i < 96; i++) { g.strokeStyle = i % 2 ? '#b5352c' : '#d8d4c8'; g.lineWidth = 1.5 * k; g.beginPath(); g.arc(X(0), Z(0), 97.4 * k, i / 96 * 6.283, (i + 1) / 96 * 6.283); g.stroke() } }
+  ring(93, 0.35, 'rgba(230,226,216,0.85)')
+  // 出発位置の塗り（番号つき）
+  TEAM_SPAWNS.forEach((p, i) => { g.save(); g.translate(X(p.x), Z(p.z)); g.rotate(-p.yaw + Math.PI); g.strokeStyle = 'rgba(232,228,216,0.85)'; g.lineWidth = 0.3 * k; g.strokeRect(-3.4 * k, -4.8 * k, 6.8 * k, 9.6 * k); g.fillStyle = 'rgba(232,228,216,0.85)'; g.font = `800 ${3.2 * k}px "Big Shoulders Display", Impact, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), 0, 6.8 * k); g.restore() })
   // 坂の前の注意の線
-  for (const p of RAMPS) { const s = Math.sin(p.ang), co = Math.cos(p.ang); g.save(); g.translate(X(p.x - s * 2.5), Z(p.z - co * 2.5)); g.rotate(-p.ang); g.fillStyle = 'rgba(232,184,28,0.85)'; g.fillRect(-p.w / 2 * k, -0.4 * k, p.w * k, 0.8 * k); g.restore() }
-  // 外周路: 白い縁の線・点線の中心線・四隅の赤白の縁石・路面の矢印
-  g.strokeStyle = 'rgba(236,232,220,0.9)'; g.lineWidth = k * 0.35
-  rrect(g, X(-107), Z(-107), X(107), Z(107), 22 * k); g.stroke(); rrect(g, X(-91), Z(-91), X(91), Z(91), 8 * k); g.stroke()
-  g.setLineDash([3 * k, 3 * k]); g.lineWidth = k * 0.3; g.strokeStyle = 'rgba(240,200,60,0.85)'; rrect(g, X(-99), Z(-99), X(99), Z(99), 15 * k); g.stroke(); g.setLineDash([])
-  for (const [cx, cz, a0] of [[-85, -85, Math.PI], [85, -85, Math.PI * 1.5], [85, 85, 0], [-85, 85, Math.PI * 0.5]]) { // 角の縁石
-    for (let i = 0; i < 12; i++) { g.strokeStyle = i % 2 ? '#e8e5dc' : '#d8372a'; g.lineWidth = k * 0.9; g.beginPath(); g.arc(X(cx), Z(cz), 22.4 * k, a0 + i * Math.PI / 24, a0 + (i + 1) * Math.PI / 24); g.stroke() } }
-  const arrow = (x, z, a, len = 6, col = 'rgba(236,232,220,0.8)') => { g.save(); g.translate(X(x), Z(z)); g.rotate(a); g.fillStyle = col; const L = len * k, W = len * 0.34 * k; g.beginPath(); g.moveTo(0, -L / 2); g.lineTo(W, 0); g.lineTo(W * 0.4, 0); g.lineTo(W * 0.4, L / 2); g.lineTo(-W * 0.4, L / 2); g.lineTo(-W * 0.4, 0); g.lineTo(-W, 0); g.closePath(); g.fill(); g.restore() }
-  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + 0.39; arrow(Math.sin(a) * 33, Math.cos(a) * 33, -a + Math.PI, 5, 'rgba(232,184,28,0.75)') }
-  for (const [x, z, a] of [[0, 99, Math.PI / 2], [-50, 99, Math.PI / 2], [50, 99, Math.PI / 2], [99, 0, Math.PI], [99, -50, Math.PI], [99, 50, Math.PI], [0, -99, -Math.PI / 2], [-50, -99, -Math.PI / 2], [50, -99, -Math.PI / 2], [-99, 0, 0], [-99, 50, 0], [-99, -50, 0]]) arrow(x, z, a, 7)
-  // クレーン下の黄黒ハッチ
-  stripes(() => { g.beginPath(); g.rect(X(72), Z(-100), 34 * k, 26 * k); g.rect(X(72.7), Z(-99.3), 32.6 * k, 24.6 * k); g.clip('evenodd') }, '#1d1c1a', 1.5)
-  // 駐車の枠線（南のヤードの出入口の前）
-  g.strokeStyle = 'rgba(236,232,220,0.7)'; g.lineWidth = k * 0.2
-  for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(X(i * 8), Z(64)); g.lineTo(X(i * 8), Z(72)); g.stroke() }
+  for (const p of RAMPS) { const s = Math.sin(p.ang), co = Math.cos(p.ang); g.save(); g.translate(X(p.x - s * 2.2), Z(p.z - co * 2.2)); g.rotate(-p.ang); g.fillStyle = 'rgba(206,168,50,0.8)'; g.fillRect(-p.w / 2 * k, -0.35 * k, p.w * k, 0.7 * k); g.restore() }
   // 油のしみ・タイヤ跡・ひび
-  for (let i = 0; i < 40; i++) { const x = (R() - 0.5) * 210, z = (R() - 0.5) * 210, r = (1.5 + R() * 4) * k, gr = g.createRadialGradient(X(x), Z(z), 0, X(x), Z(z), r); gr.addColorStop(0, 'rgba(14,13,12,0.5)'); gr.addColorStop(0.7, 'rgba(14,13,12,0.2)'); gr.addColorStop(1, 'rgba(14,13,12,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(X(x), Z(z), r * (1 + R()), r, R() * 3, 0, 7); g.fill() }
+  for (let i = 0; i < 50; i++) { const a = R() * 6.283, d = Math.sqrt(R()) * 92, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), r = (1.2 + R() * 3.4) * k, gr = g.createRadialGradient(x, z, 0, x, z, r); gr.addColorStop(0, 'rgba(10,10,10,0.55)'); gr.addColorStop(0.7, 'rgba(10,10,10,0.22)'); gr.addColorStop(1, 'rgba(10,10,10,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, z, r * (1 + R()), r, R() * 3, 0, 7); g.fill() }
   g.lineCap = 'round'
-  for (let i = 0; i < 90; i++) { let x = (R() - 0.5) * 200, z = (R() - 0.5) * 200, a = R() * 6.28; g.strokeStyle = 'rgba(14,13,12,0.28)'; g.lineWidth = k * 0.5; g.beginPath(); g.moveTo(X(x), Z(z)); for (let j = 0; j < 10; j++) { a += (R() - 0.5) * 0.5; x += Math.sin(a) * 3; z += Math.cos(a) * 3; g.lineTo(X(x), Z(z)) } g.stroke() }
-  g.strokeStyle = 'rgba(20,18,16,0.5)'; g.lineWidth = Math.max(1, k * 0.06)
-  for (let i = 0; i < 60; i++) { let x = R() * size, y = R() * size; g.beginPath(); g.moveTo(x, y); for (let j = 0; j < 12; j++) { x += (R() - 0.5) * 24 * k; y += (R() - 0.3) * 18 * k; g.lineTo(x, y) } g.stroke() }
+  for (let i = 0; i < 140; i++) { const a0 = R() * 6.283, d0 = Math.sqrt(R()) * 90; let x = Math.sin(a0) * d0, z = Math.cos(a0) * d0, a = R() * 6.28; g.strokeStyle = 'rgba(10,10,10,0.3)'; g.lineWidth = k * 0.45; g.beginPath(); g.moveTo(X(x), Z(z)); for (let j = 0; j < 12; j++) { a += (R() - 0.5) * 0.4; x += Math.sin(a) * 3; z += Math.cos(a) * 3; g.lineTo(X(x), Z(z)) } g.stroke() }
+  g.strokeStyle = 'rgba(14,13,12,0.5)'; g.lineWidth = Math.max(1, k * 0.06)
+  for (let i = 0; i < 80; i++) { let x = R() * size, y = R() * size; g.beginPath(); g.moveTo(x, y); for (let j = 0; j < 12; j++) { x += (R() - 0.5) * 24 * k; y += (R() - 0.3) * 18 * k; g.lineTo(x, y) } g.stroke() }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 8; return t
 }
-// 空と遠景
+// 夜空と遠くの街明かり
 export function skyTexture() {
   const W = 2048, Hh = 1024, [c, g] = canvas(W, Hh), R = rnd(55)
-  const gr = g.createLinearGradient(0, 0, 0, Hh); gr.addColorStop(0, '#2f67ad'); gr.addColorStop(0.3, '#5f98d2'); gr.addColorStop(0.46, '#b4cfe0'); gr.addColorStop(0.5, '#c9d0cf'); gr.addColorStop(0.52, '#c4c8c6'); gr.addColorStop(1, '#a9a99a')
+  const gr = g.createLinearGradient(0, 0, 0, Hh); gr.addColorStop(0, '#04060c'); gr.addColorStop(0.3, '#0a1020'); gr.addColorStop(0.46, '#1d2638'); gr.addColorStop(0.5, '#2b3345'); gr.addColorStop(0.52, '#161b25'); gr.addColorStop(1, '#0d1118')
   g.fillStyle = gr; g.fillRect(0, 0, W, Hh)
-  // 雲
-  for (let i = 0; i < 46; i++) { const x = R() * W, y = Hh * (0.14 + R() * 0.3), w = 80 + R() * 220; for (let j = 0; j < 8; j++) { const cx = x + (R() - 0.5) * w, cy = y + (R() - 0.5) * 24, r = 26 + R() * 50, rg = g.createRadialGradient(cx, cy, 0, cx, cy, r); rg.addColorStop(0, 'rgba(255,255,255,0.55)'); rg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = rg; g.fillRect(cx - r, cy - r, 2 * r, 2 * r) } }
-  // 遠景のシルエット（工場・煙突・タンク・丘・クレーン）。霞んだ青灰色
-  const sil = (col, base, fn) => { g.fillStyle = col; fn() }
+  for (let i = 0; i < 520; i++) { const x = R() * W, y = R() * Hh * 0.46, a = 0.15 + R() * 0.6; g.fillStyle = `rgba(220,228,255,${a})`; g.fillRect(x, y, 1 + (R() < 0.1 ? 1 : 0), 1) }
+  { const mx = 1500, my = 230, rg = g.createRadialGradient(mx, my, 0, mx, my, 120); rg.addColorStop(0, 'rgba(235,240,255,0.55)'); rg.addColorStop(1, 'rgba(235,240,255,0)'); g.fillStyle = rg; g.fillRect(mx - 120, my - 120, 240, 240); g.fillStyle = 'rgba(240,244,255,0.9)'; g.beginPath(); g.arc(mx, my, 14, 0, 7); g.fill() }
   const hy = Hh * 0.5
-  sil('rgba(150,165,180,0.8)', hy, () => { g.beginPath(); g.moveTo(0, hy); for (let x = 0; x <= W; x += 16) g.lineTo(x, hy - 22 - Math.sin(x * 0.011) * 14 - Math.sin(x * 0.037) * 7 - R() * 3); g.lineTo(W, hy); g.fill() })
-  sil('rgba(118,132,148,0.9)', hy, () => {
-    for (let x = 20; x < W; x += 40 + R() * 90) { const w = 40 + R() * 110, h = 20 + R() * 60; g.fillRect(x, hy - h, w, h); if (R() < 0.5) g.fillRect(x + w * 0.2, hy - h - 20, 6, 24) ; if (R() < 0.35) { g.fillRect(x + w * 0.6, hy - h - 70 - R() * 40, 12, 90 + h) } if (R() < 0.3) { g.beginPath(); g.arc(x + w / 2, hy - h, w * 0.3, Math.PI, 0); g.fill() } }
-    for (let x = 100; x < W; x += 300 + R() * 200) { g.fillRect(x, hy - 120, 4, 120); g.fillRect(x - 40, hy - 120, 90, 4); g.fillRect(x + 50, hy - 120, 3, 36) } // クレーン
-  })
-  g.fillStyle = 'rgba(105,118,132,1)'; g.fillRect(0, hy - 4, W, 8)
-  for (let i = 0; i < 6; i++) { const x = R() * W, rg = g.createRadialGradient(x, hy - 150, 0, x, hy - 150, 70); rg.addColorStop(0, 'rgba(230,226,218,0.45)'); rg.addColorStop(1, 'rgba(230,226,218,0)'); g.fillStyle = rg; g.fillRect(x - 70, hy - 220, 140, 140) } // 煙
+  g.fillStyle = '#0b0e15'; g.beginPath(); g.moveTo(0, hy); for (let x = 0; x <= W; x += 14) g.lineTo(x, hy - 14 - Math.sin(x * 0.009) * 12 - Math.sin(x * 0.031) * 6 - R() * 3); g.lineTo(W, hy); g.fill()
+  for (let x = 10; x < W; x += 18 + R() * 40) { const w = 14 + R() * 38, h = 14 + R() * 70; g.fillStyle = '#080a10'; g.fillRect(x, hy - h, w, h); for (let k = 0; k < w * h / 140; k++) if (R() < 0.5) { g.fillStyle = R() < 0.7 ? 'rgba(255,214,140,0.8)' : 'rgba(190,225,255,0.7)'; g.fillRect(x + 2 + R() * (w - 4), hy - h + 3 + R() * (h - 6), 1.5, 1.5) } }
+  const rg2 = g.createLinearGradient(0, hy - 90, 0, hy + 10); rg2.addColorStop(0, 'rgba(255,190,110,0)'); rg2.addColorStop(1, 'rgba(255,190,110,0.16)'); g.fillStyle = rg2; g.fillRect(0, hy - 90, W, 100)
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
+}
+// 外周の壁: コンクリートのパネル・広告板・足もとの縁
+export function wallRingTexture(aniso = 8) {
+  const [c, g] = canvas(2048, 256), R = rnd(77)
+  g.fillStyle = '#6d6c68'; g.fillRect(0, 0, 2048, 256)
+  for (let i = 0; i < 9000; i++) { const v = 90 + R() * 60 | 0; g.fillStyle = `rgba(${v},${v},${v - 4},0.10)`; g.fillRect(R() * 2048, R() * 256, 1 + R() * 3, 1 + R() * 2) }
+  for (let x = 0; x < 2048; x += 128) { g.fillStyle = 'rgba(20,20,20,0.5)'; g.fillRect(x, 0, 3, 256); g.fillStyle = 'rgba(255,255,255,0.05)'; g.fillRect(x + 3, 0, 2, 256) }
+  g.fillStyle = 'rgba(20,20,20,0.4)'; g.fillRect(0, 128, 2048, 3)
+  for (let i = 0; i < 60; i++) { const x = R() * 2048, w = 3 + R() * 12, gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, 'rgba(60,50,40,0)'); gr.addColorStop(1, 'rgba(60,50,40,0.28)'); g.fillStyle = gr; g.fillRect(x, 0, w, 256) }
+  // 広告板（暗い地に光る文字）
+  const ads = ['NITRO', 'AUTOPARTS', 'STEEL TYRE', 'MOTOR OIL', 'BUMPER', 'RACING']
+  for (let i = 0; i < 8; i++) { const x = 40 + i * 256; g.fillStyle = '#101216'; g.fillRect(x, 56, 190, 64); g.strokeStyle = '#2a2d33'; g.lineWidth = 3; g.strokeRect(x, 56, 190, 64); g.fillStyle = ['#d9d2c0', '#c9a233', '#9ec6d8', '#c8584a'][i % 4]; g.font = '800 38px "Big Shoulders Display", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ads[i % ads.length], x + 95, 90) }
+  // 足もと: 汚れた帯と赤白の縁
+  const gr2 = g.createLinearGradient(0, 168, 0, 256); gr2.addColorStop(0, 'rgba(0,0,0,0)'); gr2.addColorStop(1, 'rgba(0,0,0,0.5)'); g.fillStyle = gr2; g.fillRect(0, 168, 2048, 88)
+  for (let x = 0; x < 2048; x += 64) { g.fillStyle = (x / 64) % 2 ? '#a83b32' : '#cfcbbd'; g.fillRect(x, 208, 64, 18) }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = aniso; return t
+}
+export function wallRingEmissive() {
+  const [c, g] = canvas(2048, 256), R = rnd(78)
+  g.fillStyle = '#000'; g.fillRect(0, 0, 2048, 256)
+  const cols = ['#d9d2c0', '#c9a233', '#9ec6d8', '#c8584a']
+  for (let i = 0; i < 8; i++) { const x = 40 + i * 256; g.fillStyle = cols[i % 4]; g.globalAlpha = 0.5; g.fillRect(x + 2, 58, 186, 60); g.globalAlpha = 1; g.fillStyle = '#000'; g.font = '800 38px "Big Shoulders Display", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle' }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t
+}
+// 観客席（暗い段と、ぽつぽつ光る点）
+export function standsTexture() {
+  const [c, g] = canvas(2048, 512), R = rnd(91)
+  g.fillStyle = '#0b0d12'; g.fillRect(0, 0, 2048, 512)
+  for (let r = 0; r < 14; r++) { const y = r * 36; g.fillStyle = r % 2 ? '#10131a' : '#0d1016'; g.fillRect(0, y, 2048, 34); for (let i = 0; i < 160; i++) { if (R() < 0.35) { g.fillStyle = R() < 0.6 ? 'rgba(255,220,150,0.55)' : R() < 0.5 ? 'rgba(170,200,255,0.5)' : 'rgba(255,255,255,0.35)'; g.fillRect(R() * 2048, y + 4 + R() * 26, 2, 2) } } }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t
 }
 export function grimeTexture() {
   const [c, g] = canvas(256, 256), R = rnd(88)

@@ -137,6 +137,26 @@ await t('PC射手: A/D で向きを変えて敵をねらい、クリックで撃
   expect(s.shots > 5, '撃てていない ' + s.shots); expect(QUICK || s.hits > 3, '当たらない ' + s.hits)
   expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return { shots: s.shots, hits: s.hits, kills: s.kills, lowmag: reloaded }
 })
+await t('射手の狙い: 画面の真ん中の印が指す所へ弾が飛ぶ（近距離〜70m・6方向）', async () => {
+  const p = await open('speed=1&norender=1&seed=4')
+  await p.click('#goShoot'); await p.waitForFunction(() => __bb.S().phase === 'play', null, { timeout: 8000 })
+  await p.evaluate(() => { const S = __bb.S(); S.teams[0].ws = [{ id: 'paint', mag: 36, reloadT: 0, heat: 0, overT: 0 }, { id: 'paint', mag: 36, reloadT: 0, heat: 0, overT: 0 }]; S.teams[0].wSel = 0 }); await sleep(800)
+  const res = []
+  for (const yaw of [0, 1.2, -2.0, 3.0, 2.2, -0.8]) { await p.evaluate(y => __bb.setAim(y), yaw); await sleep(600); res.push(await p.evaluate(() => __bb.aimTest())) }
+  for (const r of res) { expect(!r.err, '撃てない ' + JSON.stringify(r)); expect(r.miss < 1.6, '印からずれる ' + r.miss.toFixed(2) + 'm（距離 ' + r.dist.toFixed(0) + 'm）') }
+  expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return { maxMiss: +Math.max(...res.map(r => r.miss)).toFixed(2), maxDist: Math.round(Math.max(...res.map(r => r.dist))) }
+})
+await t('カメラ: 車が壁ぎわでも、壁の手前に寄って車が見える（運転・射手）', async () => {
+  const out = []
+  for (const role of ['#goDrive', '#goShoot']) {
+    const p = await open('speed=1&norender=1&seed=4'); await p.click(role); await p.waitForFunction(() => __bb.S().phase === 'play', null, { timeout: 8000 })
+    await p.evaluate(() => { const S = __bb.S(), c = S.cars.find(q => q.id === S.teams[0].car); c.x = 95; c.z = 0; c.yaw = -Math.PI / 2; c.vx = c.vz = 0; c.invT = 999; __bb.setAim(-Math.PI / 2); __bb.K.snap = 1 }); await sleep(1500)
+    const r = await p.evaluate(() => { const S = __bb.S(), c = S.cars.find(q => q.id === S.teams[0].car), cam = __bb.stage.cam.position; return { rCam: Math.hypot(cam.x, cam.z), dCar: Math.hypot(cam.x - c.x, cam.z - c.z), y: cam.y } })
+    expect(r.rCam < 99.7, '壁の外にカメラが出ている ' + JSON.stringify(r)); expect(r.dCar > 2 && r.dCar < 9, '車との距離がおかしい ' + JSON.stringify(r)); out.push(+r.dCar.toFixed(1))
+    expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close()
+  }
+  return { dist: out }
+})
 // ------------------------------------------------------------ スマホ: 運転（ボタン）と、壊れた後に歩いて空き車へ
 await t('スマホ運転: ペダル・ハンドル・ブースト・Rで動く → 壊されたら歩いて空き車に乗り直せる', async () => {
   const p = await open('touch=1&speed=1&norender=1&seed=7', { width: 390, height: 844 }, true)

@@ -1,11 +1,11 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js?v=3'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=3'
-import { EngineMix } from './engine.js?v=3'
-import { makeInputs } from './cpu.js?v=3'
-import { Stage } from './stage.js?v=3'
-import { H, HALF, WORLD, BOXES, POLES, BOWL, DECK, RAMPS, SPARE_SPOTS } from './arena.js?v=3'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js?v=4'
+import { cleanName, cpuNames, NAME_MAX } from './names.js?v=4'
+import { EngineMix } from './engine.js?v=4'
+import { makeInputs } from './cpu.js?v=4'
+import { Stage } from './stage.js?v=4'
+import { H, WORLD, BOXES, POLES, BOWL, RAMPS, SPARE_SPOTS } from './arena.js?v=4'
 
 const Q = new URLSearchParams(location.search)
 const EN = Q.get('lang') === 'en'
@@ -129,9 +129,15 @@ function readHuman(dt) {
     if (!document.pointerLockElement && !touchy && K.mx !== 0 && role === 'shoot' && K.mouseDown === false && Math.abs(K.mx) > 0.35 && Q.get('edge') === '1') aimYaw -= Math.sign(K.mx) * (Math.abs(K.mx) - 0.35) * 2.4 * dt
   }
   if (role === 'shoot' && c) {
-    const as = assistAim(S, c, aimYaw)
-    const aim = as ? aimYaw + angDiff(as.yaw, aimYaw) * 0.72 : aimYaw
-    out.gun = { aim, fire: !!(K.fire || K.mouseDown || k.fire), reload: false, use: false, assist: as ? { pitch: as.pitch * 0.9 } : null }
+    // 画面の真ん中の印が指す所へ弾が飛ぶ: 光線の当たり点を、銃口から狙い直す（カメラと銃口のずれを直す）
+    const T = CAR_TYPES[c.type] || CAR_TYPES[0], sc = T.scale
+    const mx = c.x + Math.sin(c.yaw) * T.tz * sc, mz = c.z + Math.cos(c.yaw) * T.tz * sc, my = c.y + T.muzY * sc
+    const P = aimRay && aimRay.t > 4 ? aimRay : null
+    let yawP = aimYaw, pitchP = 0
+    if (P) { yawP = Math.atan2(P.x - mx, P.z - mz); const dh = Math.hypot(P.x - mx, P.z - mz); pitchP = Math.atan2(P.y - my, Math.max(1, dh)) }
+    const as = K.noAssist ? null : assistAim(S, c, yawP)
+    const aim = as ? yawP + angDiff(as.yaw, yawP) * 0.72 : yawP
+    out.gun = { aim, fire: !!(K.fire || K.mouseDown || k.fire), reload: false, use: false, assist: as ? { pitch: as.pitch * 0.9 } : null, aimPitch: as ? as.pitch * 0.9 : pitchP }
     lockedOn = !!as
   } else lockedOn = false
   if (role === 'walk') {
@@ -144,7 +150,7 @@ function readHuman(dt) {
   out.use = K.use; out.swap = K.swap; out.wswap = K.wswap; out.gun.wswap = K.wswap; if (K.wsel != null) out.gun.wsel = K.wsel; K.use = false; K.swap = false; K.wswap = false; K.wsel = null
   return out
 }
-let lockedOn = false
+let lockedOn = false, aimRay = null
 let reloadPress = false
 addEventListener('keydown', e => { if (e.code === 'KeyR') reloadPress = true })
 $('bReload').addEventListener('pointerdown', () => { reloadPress = true })
@@ -155,7 +161,6 @@ const CAR_SVG = [
   '<svg viewBox="0 0 96 44" fill="currentColor"><path d="M6 30c0-6 3-9 9-10l14-9h30l12 9c8 1 14 3 14 10v3H6z"/><circle cx="26" cy="35" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><circle cx="72" cy="35" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><path d="M33 14h24l7 6H27z" fill="#111" opacity=".55"/></svg>',
   '<svg viewBox="0 0 96 44" fill="currentColor"><path d="M4 31c0-4 3-6 9-7l20-9h26l16 9c9 1 17 3 17 7v2H4z"/><path d="M70 14h18v5H66z"/><circle cx="25" cy="35" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><circle cx="74" cy="35" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><path d="M36 16h22l8 6H30z" fill="#111" opacity=".55"/></svg>',
   '<svg viewBox="0 0 96 44" fill="currentColor"><path d="M5 12h62l10 10h14v13H5z"/><rect x="2" y="26" width="9" height="4" fill="#cfd2d6"/><rect x="2" y="32" width="9" height="3" fill="#cfd2d6"/><circle cx="26" cy="36" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><circle cx="72" cy="36" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><rect x="14" y="16" width="30" height="9" fill="#111" opacity=".55"/></svg>',
-  '<svg viewBox="0 0 96 44" fill="currentColor"><path d="M10 31c0-6 3-9 9-10l10-8h26l12 8c10 1 16 3 16 10v3H10z"/><path d="M80 8l8 14h-6zM20 12l-6 8h8z" fill="#f4f0e6"/><circle cx="29" cy="35" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><circle cx="70" cy="35" r="8" fill="#111" stroke="currentColor" stroke-width="3"/><path d="M31 15h22l7 6H25z" fill="#111" opacity=".55"/></svg>',
 ]
 const WEAPON_SVG = {
   paint: '<svg viewBox="0 0 96 44" fill="currentColor"><rect x="8" y="16" width="44" height="14" rx="3"/><rect x="50" y="20" width="40" height="5"/><circle cx="26" cy="12" r="8"/><rect x="18" y="28" width="10" height="12"/></svg>',
@@ -164,9 +169,9 @@ const WEAPON_SVG = {
   spring: '<svg viewBox="0 0 96 44" fill="currentColor"><path d="M8 34h10l6-12 8 12 8-12 8 12 8-12 6 12h8" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><circle cx="78" cy="22" r="10"/></svg>',
   cork: '<svg viewBox="0 0 96 44" fill="currentColor"><rect x="6" y="17" width="60" height="12" rx="2"/><rect x="62" y="12" width="26" height="22" rx="4" opacity=".85"/><rect x="66" y="16" width="8" height="14" fill="#111" opacity=".4"/></svg>',
 }
-const WEAPON_NOTE = { paint: ['ペイント弾', '連射できる。撃ち続けると熱くなる', 'Rapid fire. Heats up'], rocket: ['花火ロケット', '追いかける花火。爆発が大きい', 'Homing firework. Big blast'], confetti: ['紙吹雪', '近くで一気に広がる散弾', 'Close-range spread'], spring: ['バネの鉄球', '跳ね返って転がる重い玉', 'Bouncing steel ball'], cork: ['コルク砲', '速くて遠くまで届く一発', 'Fast, long-range single shot'] }
-const CAR_NOTE_EN = ['Balanced all-rounder', 'Fast and light, fragile', 'Slow but tough, hits hard', 'Nimble, long boost']
-const CAR_NAME_EN = ['Balance', 'Zoom', 'Thud', 'Nimble']
+const WEAPON_NOTE = { paint: ['機関銃', '連射できる。撃ち続けると熱くなる', 'Rapid fire. Heats up'], rocket: ['ロケット弾', '追いかける。爆発が大きい', 'Homing. Big blast'], confetti: ['散弾', '近くで一気に広がる', 'Close-range spread'], spring: ['跳ね玉', '跳ね返って転がる重い玉', 'Bouncing slug'], cork: ['狙撃砲', '速くて遠くまで届く一発', 'Fast, long-range single shot'] }
+const CAR_NOTE_EN = ['Balanced all-rounder', 'Fast and light, fragile', 'Slow but tough, hits hard']
+const CAR_NAME_EN = ['Balance', 'Zoom', 'Thud']
 const bars = (labels, vals) => labels.map((lb, i) => `<span>${lb}</span><i>${[0, 1, 2, 3, 4].map(k => `<u class="${k < vals[i] ? 'on' : ''}"></u>`).join('')}</i>`).join('')
 let selWeapons = ['paint', 'rocket'], selCar = 0, lastKills = 0
 function lo0() { return S.teams[0].loadout }
@@ -325,15 +330,13 @@ function drawRadar(cx, cz, yaw) {
   g.clearRect(0, 0, W, W); g.save(); g.beginPath(); g.arc(R, R, R - 3, 0, 7); g.clip()
   g.translate(R, R); g.rotate(yaw + Math.PI) // 進行方向が上
   g.scale(sc, sc); g.translate(-cx, -cz)
-  g.fillStyle = 'rgba(44,45,47,.92)'; g.fillRect(-WORLD, -WORLD, WORLD * 2, WORLD * 2)
-  g.fillStyle = 'rgba(88,86,80,.95)'; g.fillRect(-HALF, -HALF, HALF * 2, HALF * 2)
-  g.strokeStyle = 'rgba(232,184,28,.8)'; g.lineWidth = 1.4; g.strokeRect(-HALF, -HALF, HALF * 2, HALF * 2); g.strokeRect(-WORLD + 1, -WORLD + 1, WORLD * 2 - 2, WORLD * 2 - 2)
-  g.fillStyle = 'rgba(30,28,24,.6)'; g.beginPath(); g.arc(BOWL.x, BOWL.z, BOWL.r, 0, 7); g.fill()
-  g.fillStyle = 'rgba(120,115,105,.9)'; g.fillRect(DECK.x0, DECK.z0, DECK.x1 - DECK.x0, DECK.z1 - DECK.z0)
-  g.fillStyle = 'rgba(190,185,172,.8)'
+  g.fillStyle = 'rgba(52,54,58,.95)'; g.beginPath(); g.arc(0, 0, WORLD, 0, 7); g.fill()
+  g.strokeStyle = 'rgba(200,196,186,.8)'; g.lineWidth = 1.6; g.beginPath(); g.arc(0, 0, WORLD - 1, 0, 7); g.stroke()
+  g.fillStyle = 'rgba(24,25,27,.7)'; g.beginPath(); g.arc(BOWL.x, BOWL.z, BOWL.r, 0, 7); g.fill()
+  g.fillStyle = 'rgba(190,185,172,.85)'
   for (const o of POLES) { g.beginPath(); g.arc(o.x, o.z, Math.max(1.4, o.r), 0, 7); g.fill() }
-  for (const o of BOXES) { g.fillStyle = o.kind === 'hwall' ? 'rgba(232,184,28,.95)' : o.kind === 'cont' ? 'rgba(150,140,125,.9)' : 'rgba(190,185,172,.8)'; g.fillRect(o.x - o.w / 2, o.z - o.d / 2, o.w, o.d) }
-  g.fillStyle = 'rgba(242,194,48,.9)'
+  for (const o of BOXES) g.fillRect(o.x - o.w / 2, o.z - o.d / 2, o.w, o.d)
+  g.fillStyle = 'rgba(206,168,50,.9)'
   for (const p of RAMPS) { g.save(); g.translate(p.x, p.z); g.rotate(-p.ang); g.fillRect(-p.w / 2, 0, p.w, p.len); g.restore() }
   g.restore()
   g.save(); g.beginPath(); g.arc(R, R, R - 3, 0, 7); g.clip(); g.translate(R, R); g.rotate(yaw + Math.PI); g.scale(sc, sc); g.translate(-cx, -cz)
@@ -468,6 +471,7 @@ function frame(now) {
   stage.updateCamera(S, cv, dt, alpha); snapCam = false
   if (window.__bbCam) { stage.cam.position.set(...window.__bbCam.p); stage.cam.lookAt(...window.__bbCam.l); stage.cam.fov = window.__bbCam.fov || 55; stage.cam.updateProjectionMatrix() }
   stage.sync(S, alpha, dt, { human: !!(t && t.driver === 0) })
+  { const mc = t && t.car >= 0 ? S.cars.find(q => q.id === t.car) : null; aimRay = phase === 'play' && role === 'shoot' && mc ? stage.aimPoint(S, mc) : null }
   if (phase === 'play') {
     updateHUD(dt)
     const c = t && t.car >= 0 ? S.cars.find(q => q.id === t.car) : null
@@ -496,7 +500,17 @@ async function boot() {
   await new Promise(r => setTimeout(r, 160))
   $('loading').classList.add('off'); setTimeout(() => $('loading').remove(), 600)
   $('title').hidden = false
-  window.__bb = { showResult: r => showResult(r), advance: n => { for (let i = 0; i < n; i++) { step(S, makeInputs(S, DT, null), DT); onEvents() } }, setSpeed: v => { simSpeed = v }, S: () => S, stage, K, startMatch, toTitle, phase: () => phase, setAim: v => { aimYaw = v }, aim: () => aimYaw, role: curRole, lockedOn: () => lockedOn, hud: () => ({ marks: marks.length }) }
+  window.__bb = { aimTest: () => {
+    const t = S.teams[0], c = S.cars.find(q => q.id === t.car); if (!c || curRole() !== 'shoot') return { err: 'not shooter' }
+    S.bullets.length = 0; t.cd = 0; for (const w of t.ws) { w.heat = 0; w.reloadT = 0; w.mag = 30; w.overT = 0 }
+    const P = stage.aimPoint(S, c); aimRay = P; K.mouseDown = true; K.noAssist = true
+    const before = 0; const hin = readHuman(DT); step(S, makeInputs(S, DT, hin), DT); onEvents(); K.mouseDown = false; K.noAssist = false
+    const b = S.bullets.slice(before).find(q => q.team === 0 && q.type === 'paint'); if (!b) return { err: 'no bullet', fired: S.bullets.length - before, w: t.ws[t.wSel].id }
+    const v = Math.hypot(b.vx, b.vy, b.vz), ux = b.vx / v, uy = b.vy / v, uz = b.vz / v
+    const rx = P.x - b.x, ry = P.y - b.y, rz = P.z - b.z, along = rx * ux + ry * uy + rz * uz
+    const d = Math.hypot(rx - ux * along, ry - uy * along, rz - uz * along)
+    return { miss: d, dist: Math.hypot(rx, ry, rz), hit: P.hit, w: 'paint' }
+  }, showResult: r => showResult(r), advance: n => { for (let i = 0; i < n; i++) { step(S, makeInputs(S, DT, null), DT); onEvents() } }, setSpeed: v => { simSpeed = v }, S: () => S, stage, K, startMatch, toTitle, phase: () => phase, setAim: v => { aimYaw = v }, aim: () => aimYaw, role: curRole, lockedOn: () => lockedOn, hud: () => ({ marks: marks.length }) }
   window.__bbReady = true
   if (Q.get('start')) startMatch(Q.get('start'))
   requestAnimationFrame(t => { last = t; frame(t) })

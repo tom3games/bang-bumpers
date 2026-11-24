@@ -1,14 +1,14 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 import * as THREE from 'three'
-import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS, POLES, BOXES, H, bowlH, solidAtPoint, SPARE_SPOTS } from './arena.js?v=3'
-import * as TX from './textures.js?v=3'
-import { buildCar, buildWalker, rbox, Baker } from './models.js?v=3'
-import { Particles, Splats, Debris, Rings } from './fx.js?v=3'
+import { WORLD, BOWL, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, SPARE_SPOTS } from './arena.js?v=4'
+import * as TX from './textures.js?v=4'
+import { buildCar, buildWalker, rbox, Baker } from './models.js?v=4'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=4'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R } from './sim.js?v=3'
+import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=4'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
@@ -20,9 +20,9 @@ export class Stage {
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: !this.low, powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserve })
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.low ? 1.6 : 2))
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap
-    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0
+    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.15
     host.appendChild(r.domElement); r.domElement.id = 'gl'
-    this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xc9ced0); this.scene.fog = new THREE.FogExp2(0xc4c8c6, 0.0019)
+    this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x0a0e16); this.scene.fog = new THREE.FogExp2(0x141a24, 0.0042)
     this.cam = new THREE.PerspectiveCamera(62, 1, 0.3, 700)
     this.camPos = new THREE.Vector3(0, 8, 60); this.camLook = new THREE.Vector3(0, 1, 0); this.camYaw = Math.PI; this.shake = 0; this.fov = 62
     this.time = 0
@@ -52,15 +52,15 @@ export class Stage {
     for (let i = 0; i < pos.count; i++) { const y = pos.getY(i) / 50; c.setRGB(...(y > 0 ? [0.38 + y * 0.2, 0.34 + y * 0.18, 0.3 + y * 0.14] : [0.22, 0.2, 0.18])); col.set([c.r, c.g, c.b], i * 3) }
     dome.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3)); env.add(dome)
     for (let i = 0; i < 6; i++) { const p = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 4.4, 3.4) })); const a = i / 6 * 6.283; p.position.set(Math.sin(a) * 40, 22, Math.cos(a) * 40); p.lookAt(0, 0, 0); env.add(p) }
-    const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(env, 0.03).texture; this.scene.environmentIntensity = 0.75; pm.dispose()
+    const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(env, 0.03).texture; this.scene.environmentIntensity = 0.45; pm.dispose()
   }
   buildLights() {
     const s = this.scene
-    s.add(new THREE.HemisphereLight(0xdde8f6, 0x6a6150, 1.25))
-    const sun = this.sun = new THREE.DirectionalLight(0xffe8c0, 3.0); sun.position.set(-30, 48, 22); sun.castShadow = true
+    s.add(new THREE.HemisphereLight(0x8aa0c8, 0x2a2a30, 0.7))
+    const sun = this.sun = new THREE.DirectionalLight(0xfff0d8, 2.9); sun.position.set(-30, 48, 22); sun.castShadow = true
     sun.shadow.mapSize.set(this.low ? 1024 : 2048, this.low ? 1024 : 2048); const sc = sun.shadow.camera; sc.left = -56; sc.right = 56; sc.top = 56; sc.bottom = -56; sc.near = 5; sc.far = 170; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05
     s.add(sun); s.add(sun.target)
-    const fill = new THREE.DirectionalLight(0x9db4d6, 0.6); fill.position.set(30, 20, -30); s.add(fill)
+    const fill = new THREE.DirectionalLight(0x7f98c8, 0.45); fill.position.set(30, 20, -30); s.add(fill)
     this.sunOff = new THREE.Vector3(-30, 48, 22)
   }
   // ---------------------------------------------------------------- 固定の景色
@@ -68,169 +68,71 @@ export class Stage {
     const S = this.scene, aniso = this.low ? 4 : 8
     const addB = (bk, mat, cast = true, recv = true) => { const m = bk.mesh(mat, cast); if (!m) return null; m.receiveShadow = recv; S.add(m); return m }
     const uvs = (geo, su, sv) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv); return geo }
-    // 空（敷地の外は晴れた空と遠くの工場）
+    // 夜空
     const sky = new THREE.Mesh(new THREE.SphereGeometry(520, 32, 16), new THREE.MeshBasicMaterial({ map: TX.skyTexture(), side: THREE.BackSide, fog: false, depthWrite: false, toneMapped: false })); sky.renderOrder = -10; S.add(sky); this.sky = sky
-    // 床: 細かい粒 × 地の色 × 線と塗装 を1枚の床で重ねる
-    const seg = 220, fg = new THREE.PlaneGeometry(WORLD * 2, WORLD * 2, seg, seg); fg.rotateX(-Math.PI / 2)
+    // 床: 細かい粒 × 地の色 × 線と塗装 を1枚で重ねる
+    const seg = 200, fg = new THREE.PlaneGeometry(WORLD * 2 + 20, WORLD * 2 + 20, seg, seg); fg.rotateX(-Math.PI / 2)
     const fp = fg.attributes.position; for (let i = 0; i < fp.count; i++) fp.setY(i, bowlH(fp.getX(i), fp.getZ(i))); fg.computeVertexNormals()
     const base = TX.floorBase(aniso), tint = TX.floorTint(), paint = TX.floorPaint(this.low ? 1536 : 3072)
-    const fm = new THREE.MeshStandardMaterial({ map: base, bumpMap: base, bumpScale: 2.2, roughness: 0.86, metalness: 0.04 })
+    const fm = new THREE.MeshStandardMaterial({ map: base, bumpMap: base, bumpScale: 2.0, roughness: 0.9, metalness: 0.02 })
+    const FW = WORLD * 2 + 20
     fm.onBeforeCompile = sh => {
       sh.uniforms.uTint = { value: tint }; sh.uniforms.uPaint = { value: paint }
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vWP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = position.xz;')
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vWP; uniform sampler2D uTint; uniform sampler2D uPaint;')
-        .replace('#include <map_fragment>', `vec2 wuv = vec2((vWP.x + ${WORLD}.0) / ${WORLD * 2}.0, 1.0 - (vWP.y + ${WORLD}.0) / ${WORLD * 2}.0);
+        .replace('#include <map_fragment>', `vec2 wuv = clamp(vec2((vWP.x + ${WORLD}.0) / ${WORLD * 2}.0, 1.0 - (vWP.y + ${WORLD}.0) / ${WORLD * 2}.0), 0.0, 1.0);
           vec3 baseC = texture2D( map, vMapUv ).rgb; vec3 tintC = texture2D( uTint, wuv ).rgb; vec4 paintC = texture2D( uPaint, wuv );
           diffuseColor.rgb *= mix( baseC * tintC * 2.0, paintC.rgb * (0.7 + baseC * 0.6), paintC.a );`)
     }
+    void FW
     const floor = new THREE.Mesh(fg, fm); floor.receiveShadow = true; S.add(floor)
-    const out = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ map: base.clone(), color: 0x6b6a60, roughness: 1 })); out.material.map.repeat.set(160, 160); out.material.map.needsUpdate = true; out.rotation.x = -Math.PI / 2; out.position.y = -0.04; S.add(out)
-    // 建屋の壁（出入口つき）。種類ごとに焼き込む
-    const wm = new THREE.MeshStandardMaterial({ map: TX.wallTexture(aniso), emissiveMap: TX.wallEmissive(), emissive: 0xffffff, emissiveIntensity: 1.2, roughness: 0.8, metalness: 0.3 })
-    const WH = 24, bw = new Baker()
-    for (const o of BOXES) if (o.kind === 'hwall') { const L = Math.max(o.w, o.d), g = new THREE.BoxGeometry(o.w, o.h + 4, o.d); uvs(g, L / 40, 1); bw.add(g, o.x, (o.h + 4) / 2, o.z) }
-    addB(bw, wm, false, true)
-    // 出入口の黄黒の枠と番号の看板
-    { const bf = new Baker(), Y = 0xe8b81c, K = 0x1d1c1a, dw2 = 7.4
-      const frame = (cx, cz, alongX, n) => {
-        const sx = alongX ? 1 : 0.7, sz = alongX ? 0.7 : 1
-        for (const s of [-1, 1]) bf.add(new THREE.BoxGeometry(alongX ? 0.7 : 3.4, 12.6, alongX ? 3.4 : 0.7), cx + (alongX ? s * dw2 : 0), 6.3, cz + (alongX ? 0 : s * dw2), Y)
-        bf.add(new THREE.BoxGeometry(alongX ? 15.8 : 3.4, 1.2, alongX ? 3.4 : 15.8), cx, 12.6, cz, Y)
-        for (let i = -3; i <= 3; i++) bf.add(new THREE.BoxGeometry(alongX ? 1.1 : 3.5, 1.25, alongX ? 3.5 : 1.1), cx + (alongX ? i * 2.2 : 0), 12.6, cz + (alongX ? 0 : i * 2.2), K)
-        void sx; void sz; void n
-      }
-      for (const x of DOORS.S) frame(x, HALF + 1, true)
-      for (const z of DOORS.E) { frame(HALF + 1, z, false); frame(-HALF - 1, z, false) }
-      addB(bf, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.3 }), true, true) }
-    // 屋根と梁（建屋の上だけ）
-    const roof = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2.1, HALF * 2.1), new THREE.MeshStandardMaterial({ color: 0x2c2a27, roughness: 0.9, side: THREE.DoubleSide })); roof.rotation.x = Math.PI / 2; roof.position.y = WH + 0.5; S.add(roof)
-    const steel = new THREE.MeshStandardMaterial({ color: 0x3b3f44, roughness: 0.55, metalness: 0.7 })
-    const bs = new Baker()
-    for (let i = -5; i <= 5; i++) { bs.add(new THREE.BoxGeometry(HALF * 2.05, 1.1, 0.7), 0, WH - 1, i * 11); bs.add(new THREE.BoxGeometry(0.7, 1.1, HALF * 2.05), i * 11, WH - 1.6, 0) }
-    addB(bs, steel, false, false)
-    const lampPos = []; for (let x = -36; x <= 36; x += 24) for (let z = -36; z <= 36; z += 24) lampPos.push([x, z])
-    const m4 = new THREE.Matrix4()
-    const lamps = new THREE.InstancedMesh(new THREE.ConeGeometry(1.5, 1.1, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0x2f3236, roughness: 0.5, metalness: 0.7, side: THREE.DoubleSide }), lampPos.length)
-    const discG = new THREE.CircleGeometry(1.0, 16); discG.rotateX(Math.PI / 2)
-    const discs = new THREE.InstancedMesh(discG, new THREE.MeshBasicMaterial({ color: 0xfff1c8, toneMapped: false }), lampPos.length)
-    const chains = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 3.4, 4), steel, lampPos.length)
-    lampPos.forEach(([x, z], i) => { lamps.setMatrixAt(i, m4.makeTranslation(x, WH - 4, z)); discs.setMatrixAt(i, m4.makeTranslation(x, WH - 4.5, z)); chains.setMatrixAt(i, m4.makeTranslation(x, WH - 2.3, z)) })
-    S.add(lamps, discs, chains)
-    const gp = new THREE.BufferGeometry(); gp.setAttribute('position', new THREE.Float32BufferAttribute(lampPos.flatMap(([x, z]) => [x, WH - 5.2, z]), 3))
-    S.add(new THREE.Points(gp, new THREE.PointsMaterial({ map: TX.glowTexture(), color: 0xffe2a8, size: 9, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.6, fog: false })))
-    // 窓からの光の筋（建屋の中）
-    const bt = TX.beamTexture(), bm = new THREE.MeshBasicMaterial({ map: bt, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false })
-    const sd = new THREE.Vector3(30, -48, -22).normalize(), up = sd.clone().multiplyScalar(-1), bb = new Baker(), qq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), up), ee = new THREE.Euler().setFromQuaternion(qq)
-    for (let i = 0; i < 9; i++) {
-      const gx = -40 + i * 11 + (i % 2) * 4, gz = -26 + ((i * 37) % 52), L = 56, w = 5 + (i % 3) * 2.5
-      for (const rot of [0, Math.PI / 2]) { const g = new THREE.PlaneGeometry(w, L); g.rotateY(rot); bb.add(g, gx + up.x * L / 2, up.y * L / 2, gz + up.z * L / 2, null, ee.x, ee.y, ee.z) }
+    const out = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 1 })); out.rotation.x = -Math.PI / 2; out.position.y = -0.04; S.add(out)
+    // 外周の壁（円）・上の縁の光・観客席
+    const wm = new THREE.MeshStandardMaterial({ map: TX.wallRingTexture(aniso), emissiveMap: TX.wallRingEmissive(), emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.85, metalness: 0.1, side: THREE.BackSide })
+    wm.map.repeat.set(-5, 1); wm.map.offset.x = 1; wm.emissiveMap.repeat.set(-5, 1); wm.emissiveMap.offset.x = 1
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(WORLD + 1.2, WORLD + 1.2, 7, 128, 1, true), wm); wall.position.y = 3.5; wall.receiveShadow = true; S.add(wall)
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(WORLD + 1.4, WORLD + 1.4, 0.35, 128, 1, true), new THREE.MeshBasicMaterial({ color: 0xdfe6f0, side: THREE.BackSide, toneMapped: false })); rim.position.y = 7.2; S.add(rim)
+    const standsT = TX.standsTexture(); standsT.repeat.set(4, 1)
+    const stands = new THREE.Mesh(new THREE.CylinderGeometry(WORLD + 34, WORLD + 4, 30, 96, 1, true), new THREE.MeshBasicMaterial({ map: standsT, side: THREE.BackSide, fog: false })); stands.position.y = 15; S.add(stands)
+    // 投光器の塔（外周に12本）
+    const bt = new Baker(), bh = new Baker()
+    for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283 + 0.13, x = Math.sin(a) * (WORLD + 12), z = Math.cos(a) * (WORLD + 12)
+      bt.add(new THREE.CylinderGeometry(0.5, 0.9, 36, 8), x, 18, z, 0x30343a)
+      for (let r = 0; r < 3; r++) for (let q = 0; q < 4; q++) bh.add(new THREE.BoxGeometry(1.8, 1.3, 0.3), x + Math.sin(a + 3.14) * 0.9 + Math.cos(a) * (q - 1.5) * 2, 36 + r * 1.6, z + Math.cos(a + 3.14) * 0.9 - Math.sin(a) * (q - 1.5) * 2, 0xfff4dc, 0, a + Math.PI, 0) }
+    addB(bt, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.6 }), false, false)
+    { const m = bh.mesh(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), false); S.add(m) }
+    const gp = new THREE.BufferGeometry(); gp.setAttribute('position', new THREE.Float32BufferAttribute(Array.from({ length: 12 }, (_, i) => { const a = i / 12 * 6.283 + 0.13; return [Math.sin(a) * (WORLD + 10), 38, Math.cos(a) * (WORLD + 10)] }).flat(), 3))
+    S.add(new THREE.Points(gp, new THREE.PointsMaterial({ map: TX.glowTexture(), color: 0xfff0d0, size: 42, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8, fog: false })))
+    // 坂（くさび）。形ごとに高さと長さが違う
+    const rampMat = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.85, metalness: 0.1 })
+    const edgeM = new THREE.MeshStandardMaterial({ map: TX.hazardTexture('#c9a233', aniso), roughness: 0.7 })
+    const bRamp = new Baker(), bEdge = new Baker()
+    for (const p of RAMPS) {
+      const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(p.len, 0); sh.lineTo(p.len, p.h); sh.closePath()
+      const g = new THREE.ExtrudeGeometry(sh, { depth: p.w, bevelEnabled: false }); g.translate(0, 0, -p.w / 2); uvs(g, 0.22, 0.22)
+      bRamp.add(g, p.x, 0, p.z, null, 0, p.ang - Math.PI / 2, 0)
+      bEdge.add(uvs(new THREE.BoxGeometry(0.6, 0.16, p.w), 0.4, p.w / 1.4), Math.sin(p.ang) * (p.len - 0.3) + p.x, p.h + 0.04, Math.cos(p.ang) * (p.len - 0.3) + p.z, null, 0, p.ang - Math.PI / 2, 0)
     }
-    { const m = bb.mesh(bm, false); m.renderOrder = 3; S.add(m) }
-    // 坂（くさび）と上の通路
-    const rampMat = new THREE.MeshStandardMaterial({ map: TX.steelTexture(aniso), roughness: 0.5, metalness: 0.6 })
-    const hzM = new THREE.MeshStandardMaterial({ map: TX.hazardTexture('#e8b81c', aniso), roughness: 0.6 })
-    const bRamp = new Baker(), bHaz = new Baker()
-    const wedge = (x, z, ang, len, w, h, isDeck) => {
-      const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(len, 0); sh.lineTo(len, h); sh.closePath()
-      const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2); uvs(g, 0.35, 0.35)
-      bRamp.add(g, x, 0, z, null, 0, ang - Math.PI / 2, 0)
-      if (!isDeck) bHaz.add(uvs(new THREE.BoxGeometry(0.5, 0.14, w), 0.4, w / 1.4), Math.sin(ang) * (len - 0.3) + x, h + 0.02, Math.cos(ang) * (len - 0.3) + z, null, 0, ang - Math.PI / 2, 0)
-    }
-    for (const p of RAMPS) wedge(p.x, p.z, p.ang, p.len, p.w, p.h, false)
-    const dw = DECK.x1 - DECK.x0, dd = DECK.z1 - DECK.z0
-    wedge(DECK.x1 + DECK.ramp, (DECK.z0 + DECK.z1) / 2, -Math.PI / 2, DECK.ramp, dd, DECK.h, true)
-    wedge(DECK.x0 - DECK.ramp, (DECK.z0 + DECK.z1) / 2, Math.PI / 2, DECK.ramp, dd, DECK.h, true)
-    bHaz.add(uvs(new THREE.BoxGeometry(dw, 0.12, 0.8), dw / 1.2 * 0.5, 1), 0, DECK.h + 0.07, DECK.z1 - 0.4)
-    addB(bRamp, rampMat); addB(bHaz, hzM, false)
-    const deckM = new THREE.MeshStandardMaterial({ map: TX.steelTexture(aniso), roughness: 0.55, metalness: 0.55 }); deckM.map = deckM.map.clone(); deckM.map.repeat.set(20, 3.5); deckM.map.needsUpdate = true
-    const db = new THREE.Mesh(new THREE.BoxGeometry(dw, DECK.h, dd), deckM); db.position.set((DECK.x0 + DECK.x1) / 2, DECK.h / 2, (DECK.z0 + DECK.z1) / 2); db.castShadow = db.receiveShadow = true; S.add(db)
-    const dface = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.92, side: THREE.DoubleSide }); dface.map.repeat.set(16, 1.2)
-    const front = new THREE.Mesh(new THREE.PlaneGeometry(dw, DECK.h), dface); front.position.set(0, DECK.h / 2, DECK.z1 + 0.03); front.rotation.y = Math.PI; front.receiveShadow = true; S.add(front)
-    // 柱・照明塔・クレーンの脚・タンク
+    addB(bRamp, rampMat); addB(bEdge, edgeM, false)
+    // 柱・タイヤの山
     const poleM = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 })
-    const bPole = new Baker(), bBand = new Baker(), bRing = new Baker(), bYel = new Baker(), bSilo = new Baker(), bLamp = new Baker(), bBand2 = new Baker()
+    const bPole = new Baker(), bBand = new Baker(), bTire = new Baker()
     for (const o of POLES) {
-      if (o.kind === 'mast') { bYel.add(new THREE.CylinderGeometry(o.r, o.r * 1.5, o.h, 8), o.x, o.base + o.h / 2, o.z, 0x6f7377); bLamp.add(new THREE.BoxGeometry(2.4, 0.5, 1.2), o.x, o.base + o.h + 0.3, o.z, 0xfff0c0); bYel.add(new THREE.BoxGeometry(2.8, 0.25, 1.6), o.x, o.base + o.h + 0.7, o.z, 0x3a3d40); continue }
-      if (o.kind === 'barrel') { bSilo.add(new THREE.CylinderGeometry(o.r, o.r, o.h, 12), o.x, o.base + o.h / 2, o.z, o.col); for (const yy of [0.25, 0.95]) bYel.add(new THREE.CylinderGeometry(o.r + 0.03, o.r + 0.03, 0.09, 12), o.x, o.base + yy, o.z, 0x2a2a2a); continue }
-      if (o.kind === 'tires') { for (let i = 0; i < 4; i++) bBand2.add(new THREE.TorusGeometry(0.72, 0.28, 8, 14), o.x + (i % 2) * 0.06, o.base + 0.28 + i * 0.4, o.z, 0x161616, Math.PI / 2); continue }
-      if (o.kind === 'crane') { bYel.add(new THREE.CylinderGeometry(o.r, o.r * 1.15, o.h, 10), o.x, o.base + o.h / 2, o.z, 0xe8b81c); bBand.add(uvs(new THREE.CylinderGeometry(o.r + 0.04, o.r + 0.04, 1.6, 12, 1, true), 4, 1), o.x, o.base + 0.9, o.z); continue }
-      if (o.kind === 'silo') { bSilo.add(new THREE.CylinderGeometry(o.r, o.r, o.h, 24), o.x, o.base + o.h / 2, o.z, 0xb9b6ac); bSilo.add(new THREE.SphereGeometry(o.r, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), o.x, o.base + o.h, o.z, 0x9c9a92); bYel.add(new THREE.CylinderGeometry(o.r + 0.05, o.r + 0.05, 1.4, 24), o.x, o.base + o.h * 0.5, o.z, 0xc4442f); bBand.add(uvs(new THREE.CylinderGeometry(o.r + 0.04, o.r + 0.04, 1.2, 24, 1, true), 12, 1), o.x, o.base + 0.7, o.z); continue }
-      const hgt = WH - o.base
-      bPole.add(uvs(new THREE.CylinderGeometry(o.r, o.r * (o.kind === 'core' ? 1.0 : 1.04), hgt, o.kind === 'core' ? 28 : 14), Math.max(2, o.r * 2), 6), o.x, o.base + hgt / 2, o.z)
-      bBand.add(uvs(new THREE.CylinderGeometry(o.r + 0.03, o.r + 0.03, 1.4, 18, 1, true), Math.max(2, Math.round(o.r * 3)), 1), o.x, o.base + 0.8, o.z)
-      if (o.kind === 'core') for (const yy of [7, 12]) bRing.add(new THREE.TorusGeometry(o.r + 0.05, 0.12, 8, 28), o.x, o.base + yy, o.z, 0xff4b2a, Math.PI / 2)
+      if (o.kind === 'tires') { for (let i = 0; i < 4; i++) bTire.add(new THREE.TorusGeometry(0.66, 0.27, 8, 14), o.x + (i % 2) * 0.05, o.base + 0.27 + i * 0.4, o.z, 0x131314, Math.PI / 2); continue }
+      bPole.add(uvs(new THREE.CylinderGeometry(o.r, o.r * 1.05, o.h, 16), Math.max(2, o.r * 2), 3), o.x, o.base + o.h / 2, o.z)
+      bBand.add(uvs(new THREE.CylinderGeometry(o.r + 0.03, o.r + 0.03, 1.2, 18, 1, true), Math.max(2, Math.round(o.r * 3)), 1), o.x, o.base + 0.7, o.z)
     }
-    addB(bPole, poleM); addB(bBand, hzM, false); addB(bBand2, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }))
-    addB(bYel, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.5 })); addB(bSilo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.3 }))
-    { const m = bRing.mesh(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), false); S.add(m); const l = bLamp.mesh(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), false); if (l) S.add(l) }
-    // クレーン本体（上の梁・台車・吊り荷）
-    { const bk = new Baker(), Y = 0xe8b81c, y = 28.5
-      for (const z of [-100, -74]) bk.add(new THREE.BoxGeometry(36, 1.6, 1.6), 89, y, z, Y)
-      for (const x of [72, 106]) bk.add(new THREE.BoxGeometry(1.6, 1.6, 28), x, y, -87, Y)
-      bk.add(new THREE.BoxGeometry(2.2, 2.2, 30), 89, y + 1.4, -87, 0xd9a416); bk.add(new THREE.BoxGeometry(5, 2.4, 4), 89, y - 1.6, -87, 0x3a3d40)
-      for (const dz of [-1.4, 1.4]) bk.add(new THREE.CylinderGeometry(0.06, 0.06, 15, 5), 89, y - 9, -87 + dz, 0x222222)
-      bk.add(new THREE.BoxGeometry(2.6, 2.6, 12), 89, y - 16.6, -87, 0x2f5e9c)
-      for (const [x, z] of [[72, -100], [72, -74], [106, -100], [106, -74]]) for (let h = 5; h < 27; h += 7) { bk.add(new THREE.BoxGeometry(3, 0.4, 0.4), x, h, z, Y) }
-      S.add(bk.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.5 }), true)) }
-    // 箱・機械・バリア・コンテナ（種類ごとに1つ）
-    const bCr = new Baker(), bMc = new Baker(), bBr = new Baker(), bBh = new Baker(), bCt = new Baker(), bCn = new Baker()
-    const cg = new THREE.BoxGeometry(1, 1, 1)
+    addB(bPole, poleM); addB(bBand, edgeM, false); addB(bTire, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }))
+    // バリア
+    const bBr = new Baker(), bBh = new Baker()
     for (const o of BOXES) {
-      if (o.kind === 'hwall') continue
-      if (o.kind === 'barrier') {
-        const w = Math.max(o.w, o.d), d = Math.min(o.w, o.d), sh = new THREE.Shape()
-        sh.moveTo(-d / 2, 0); sh.lineTo(d / 2, 0); sh.lineTo(d * 0.28, o.h * 0.55); sh.lineTo(d * 0.18, o.h); sh.lineTo(-d * 0.18, o.h); sh.lineTo(-d * 0.28, o.h * 0.55); sh.closePath()
-        const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2); uvs(g, 0.3, 0.3)
-        bBr.add(g, o.x, o.base, o.z, null, 0, o.w > o.d ? Math.PI / 2 : 0, 0)
-        bBh.add(uvs(new THREE.BoxGeometry(o.w + 0.02, 0.22, o.d + 0.02), Math.max(o.w, o.d) / 1.1 * 0.5, 1), o.x, o.base + o.h - 0.25, o.z)
-      } else if (o.kind === 'cont') {
-        // 波板の筋を3本ずつ足して、コンテナらしく
-        const g = new THREE.BoxGeometry(o.w, o.h, o.d); bCt.add(g, o.x, o.base + o.h / 2, o.z, o.color)
-        const along = o.w > o.d
-        for (let i = -4; i <= 4; i++) { const ox = along ? i * o.w / 9 : 0, oz = along ? 0 : i * o.d / 9; bCt.add(new THREE.BoxGeometry(along ? 0.12 : o.w + 0.1, o.h - 0.3, along ? o.d + 0.1 : 0.12), o.x + ox, o.base + o.h / 2, o.z + oz, o.color - 0x0a0a0a > 0 ? (o.color & 0xfefefe) >> 1 | 0x101010 : 0x202020) }
-        bCt.add(new THREE.BoxGeometry(along ? o.w + 0.1 : 0.3, 0.2, along ? 0.3 : o.d + 0.1), o.x, o.base + o.h - 0.1, o.z, 0x2a2a2a)
-      } else if (o.kind === 'corner') {
-        bCn.add(new THREE.BoxGeometry(o.w, o.h, o.d), o.x, o.base + o.h / 2, o.z, 0x9a9890); bCn.add(new THREE.BoxGeometry(o.w + 0.05, 0.4, o.d + 0.05), o.x, o.base + o.h - 0.2, o.z, 0xe8b81c)
-      } else (o.kind === 'machine' ? bMc : bCr).add(new THREE.BoxGeometry(o.w, o.h, o.d), o.x, o.base + o.h / 2, o.z, null, 0, o.kind === 'crate' ? (o.x * 0.37 + o.z * 0.11) % 0.12 : 0, 0)
+      const w = Math.max(o.w, o.d), d = Math.min(o.w, o.d), sh = new THREE.Shape()
+      sh.moveTo(-d / 2, 0); sh.lineTo(d / 2, 0); sh.lineTo(d * 0.28, o.h * 0.55); sh.lineTo(d * 0.18, o.h); sh.lineTo(-d * 0.18, o.h); sh.lineTo(-d * 0.28, o.h * 0.55); sh.closePath()
+      const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2); uvs(g, 0.3, 0.3)
+      bBr.add(g, o.x, o.base, o.z, null, 0, o.w > o.d ? Math.PI / 2 : 0, 0)
+      bBh.add(uvs(new THREE.BoxGeometry(o.w + 0.02, 0.2, o.d + 0.02), Math.max(o.w, o.d) / 1.1 * 0.5, 1), o.x, o.base + o.h - 0.22, o.z)
     }
-    void cg
-    addB(bCr, new THREE.MeshStandardMaterial({ map: TX.crateTexture(aniso), roughness: 0.85 }))
-    addB(bMc, new THREE.MeshStandardMaterial({ map: TX.machineTexture(aniso), roughness: 0.55, metalness: 0.35 }))
-    addB(bBr, new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 })); addB(bBh, hzM, false)
-    addB(bCt, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.45 }))
-    addB(bCn, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }))
-    // 敷地の外周の塀
-    { const bk = new Baker(), W2 = WORLD + 1
-      for (const [x, z, w, d] of [[0, -W2, W2 * 2, 1], [0, W2, W2 * 2, 1], [-W2, 0, 1, W2 * 2], [W2, 0, 1, W2 * 2]]) { bk.add(new THREE.BoxGeometry(w, 6, d), x, 3, z, 0x8a867c); bk.add(new THREE.BoxGeometry(w + (w > d ? 0 : 0.6), 0.5, d + (d > w ? 0 : 0.6)), x, 6.2, z, 0x55534e) }
-      S.add(bk.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), false)) }
-    this.buildDecor(steel)
-    this.banners()
-  }
-  buildDecor(steel) {
-    const S = this.scene, R0 = (() => { let a = 99; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } })()
-    const m4 = new THREE.Matrix4()
-    // 壁の配管と配電盤（まとめて1つ）
-    const bk = new Baker(), pc = 0x7a5d3a
-    for (const [y, r] of [[5.6, 0.32], [7.2, 0.2], [8.4, 0.26]]) for (const z of [-HALF + 0.5, HALF - 0.5]) bk.add(new THREE.CylinderGeometry(r, r, HALF * 2, 8), 0, y, z, pc, 0, 0, Math.PI / 2)
-    for (const x of [-HALF + 0.5, HALF - 0.5]) bk.add(new THREE.CylinderGeometry(0.3, 0.3, HALF * 2, 8), x, 6.2, 0, pc, Math.PI / 2)
-    for (const [x, z, ry] of [[-30, -HALF + 0.7, 0], [14, HALF - 0.7, Math.PI], [HALF - 0.7, 22, -Math.PI / 2], [-HALF + 0.7, -40, Math.PI / 2], [-HALF + 0.7, 28, Math.PI / 2]]) bk.add(new THREE.BoxGeometry(3.2, 3.4, 1.0), x, 1.7, z, 0x5b6f78, 0, ry, 0)
-    const m = bk.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.5 }), false); S.add(m)
-  }
-  // 万国旗（チームの色の三角）と、壁の大きな看板
-  banners() {
-    const S = this.scene, tri = new THREE.BufferGeometry(); tri.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.7, 0, 0, 0.7, 0, 0, 0, -1.3, 0]), 3)); tri.computeVertexNormals()
-    const im = new THREE.InstancedMesh(tri, new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide }), 80), m4 = new THREE.Matrix4(), c = new THREE.Color()
-    let k = 0
-    for (const zz of [-24, 24]) for (let i = 0; i < 40; i++) { if ((i * 7 + (zz > 0 ? 3 : 0)) % 11 === 0) continue; const x = -58 + i * 2.95 + Math.sin(i * 2.1) * 0.25, sag = Math.sin((i / 39) * Math.PI) * 1.6, sc = 0.8 + ((i * 13) % 5) * 0.1; m4.compose(new THREE.Vector3(x, 20.8 - sag + Math.sin(i * 1.3) * 0.1, zz), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.sin(i * 1.7) * 0.18)), new THREE.Vector3(sc, sc, sc)); im.setMatrixAt(k, m4); im.setColorAt(k, c.setHex(TEAM_COLORS[(i * 3 + (zz > 0 ? 2 : 0)) % 5])); k++ }
-    im.count = k; S.add(im)
-    const bl = new Baker(); for (const zz of [-24, 24]) bl.add(new THREE.CylinderGeometry(0.03, 0.03, 118, 4), 0, 20.25, zz, 0x222222, 0, 0, Math.PI / 2)
-    S.add(bl.mesh(new THREE.MeshBasicMaterial({ vertexColors: true }), false))
-    const c2 = document.createElement('canvas'); c2.width = 1024; c2.height = 256; const g = c2.getContext('2d')
-    g.fillStyle = '#e8b81c'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#1d1c1a'; for (let i = -256; i < 1100; i += 64) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 28, 0); g.lineTo(i + 28 - 256, 256); g.lineTo(i - 256, 256); g.fill() }
-    g.fillStyle = '#1d1c1a'; g.fillRect(40, 40, 944, 176); g.fillStyle = '#f2efe6'; g.font = '800 150px "Big Shoulders Display", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('BANG BUMPERS', 512, 136)
-    const bt = new THREE.CanvasTexture(c2); bt.colorSpace = THREE.SRGBColorSpace
-    const sg = new Baker(); const pg = new THREE.PlaneGeometry(26, 6.5); sg.add(pg, 0, 14, -HALF + 1.1); sg.add(pg, 0, 14, HALF - 1.1, null, 0, Math.PI, 0)
-    S.add(sg.mesh(new THREE.MeshStandardMaterial({ map: bt, roughness: 0.6, emissive: 0xffffff, emissiveMap: bt, emissiveIntensity: 0.35 }), false))
+    addB(bBr, new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 })); addB(bBh, edgeM, false)
   }
   // ---------------------------------------------------------------- 動く物の入れ物
   buildDynamic() {
@@ -238,14 +140,14 @@ export class Stage {
     this.pSmoke = new Particles(S, this.low ? 700 : 1400, false, sc); this.pFire = new Particles(S, this.low ? 700 : 1400, true, sc)
     this.splats = new Splats(S, this.low ? 50 : 90); this.marks = new Splats(S, this.low ? 120 : 220); this.debris = new Debris(S); this.rings = new Rings(S)
     // 弾
-    this.bulletM = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ toneMapped: false }), 160); this.bulletM.frustumCulled = false; this.bulletM.count = 0; S.add(this.bulletM)
+    this.bulletM = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 6, 5), new THREE.MeshBasicMaterial({ toneMapped: false }), 160); this.bulletM.frustumCulled = false; this.bulletM.count = 0; S.add(this.bulletM)
     this.confM = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.3, 0.2), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false }), 200); this.confM.frustumCulled = false; this.confM.count = 0; S.add(this.confM)
     this.rockets = []
     for (let i = 0; i < 6; i++) {
       const g = new THREE.Group(), b = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.1, 10), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.4 })); b.rotation.x = Math.PI / 2; g.add(b)
       const n = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 10), new THREE.MeshStandardMaterial({ color: 0xd8372a, roughness: 0.4 })); n.rotation.x = Math.PI / 2; n.position.z = 0.75; g.add(n)
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 4), new THREE.MeshStandardMaterial({ color: 0xb08a50 })); st.rotation.x = Math.PI / 2; st.position.z = -1.0; g.add(st)
-      g.visible = false; S.add(g); this.rockets.push(g)
+      g.scale.setScalar(0.75); g.visible = false; S.add(g); this.rockets.push(g)
     }
     // 手榴弾・タレット
     this.grenades = []; this.turretMs = []
@@ -264,11 +166,11 @@ export class Stage {
     const og = new THREE.CircleGeometry(1, 28); og.rotateX(-Math.PI / 2)
     for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(og, new THREE.MeshStandardMaterial({ color: 0x0b0b0e, roughness: 0.05, metalness: 0.9, transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: -3 })); m.visible = false; m.receiveShadow = true; S.add(m); this.oilMs.push(m) }
     this.pickMs = []
-    const icons = { turbo: ['#f08a1e', 'bolt'], spear: ['#f08a1e', 'spear'], oil: ['#f08a1e', 'oil'], mine: ['#f08a1e', 'mine'], repair: ['#2f9e57', 'plus'], grenade: ['#1fa6cf', 'gren'], flash: ['#1fa6cf', 'flash'], smoke: ['#1fa6cf', 'cloud'], ricochet: ['#1fa6cf', 'zig'], turret: ['#1fa6cf', 'tur'] }
+    const icons = { turbo: ['#c97a2e', 'bolt'], spear: ['#c97a2e', 'spear'], oil: ['#c97a2e', 'oil'], mine: ['#c97a2e', 'mine'], repair: ['#34855a', 'plus'], grenade: ['#2f8aa8', 'gren'], flash: ['#2f8aa8', 'flash'], smoke: ['#2f8aa8', 'cloud'], ricochet: ['#2f8aa8', 'zig'], turret: ['#2f8aa8', 'tur'] }
     this.pickIcons = {}
     for (const k in icons) this.pickIcons[k] = this.iconTex(icons[k][0], icons[k][1])
     for (let i = 0; i < 32; i++) {
-      const g = new THREE.Group(), b = new THREE.Mesh(i < 0 ? new THREE.BoxGeometry(1, 1, 1) : new THREE.BoxGeometry(1.15, 1.15, 1.15), new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1, emissive: 0xffffff, emissiveIntensity: 0.15 })); b.castShadow = true; g.add(b)
+      const g = new THREE.Group(), b = new THREE.Mesh(i < 0 ? new THREE.BoxGeometry(1, 1, 1) : new THREE.BoxGeometry(1.15, 1.15, 1.15), new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.4, emissive: 0xffffff, emissiveIntensity: 0.07 })); b.castShadow = true; g.add(b)
       const ic = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false })); ic.scale.set(1.5, 1.5, 1); ic.position.y = 1.5; g.add(ic)
       const ring = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.4, 28), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; g.add(ring)
       g.visible = false; S.add(g); this.pickMs.push({ g, b, ic, ring })
@@ -303,7 +205,7 @@ export class Stage {
     if (v && v.type !== c.type) { this.dropCar(v); this.cars.delete(c.id); v = null }
     if (!v) {
       const team = c.team
-      const col = team >= 0 ? TEAM_COLORS[team] : [0xd9d6cc, 0x7b8085, 0x9a6a40, 0x4a5a78, 0x8fa35a, 0xcfc095][c.id % 6]
+      const col = team >= 0 ? TEAM_COLORS[team] : [0x9a9da2, 0x5c6168, 0x6b4f3a, 0x3d4658, 0x5f6a48, 0x8d8774][c.id % 6]
       v = buildCar(col, team >= 0 ? team + 1 : 0, c.type); v.type = c.type; v.g.scale.setScalar((CAR_TYPES[c.type] || CAR_TYPES[0]).scale); v.team = team; v.col = col; v.hpShown = 100; v.wheelRot = 0; v.smokeT = 0; v.fireT = 0; v.flash = 0; v.pitchAcc = 0; v.ps = 0; v.psV = 0; v.rs = 0; v.rsV = 0; v.hv = 0; v.hvV = 0; v.sp0 = 0; v.exploded = false; v.hoodOpen = 0
       v.g.traverse(o => { if (o.isMesh) o.matrixAutoUpdate = true })
       this.scene.add(v.g); this.cars.set(c.id, v)
@@ -312,7 +214,7 @@ export class Stage {
     }
     if (v.team !== c.team) { // 空き車に乗った（色が変わる）
       v.team = c.team; const col = c.team >= 0 ? TEAM_COLORS[c.team] : v.col
-      v.base.setHex(col); v.paint.color.setHex(col); v.flag.material.color.setHex(col); v.flag.material.emissive.setHex(col); v.beacon.visible = c.team < 0
+      v.base.setHex(col); v.paint.color.setHex(col); v.flag.material.color.setHex(col); v.beacon.visible = c.team < 0
       v.gun.helm.material.color.setHex(col); v.drv.helm.material.color.setHex(col)
       if (c.team >= 0) this.rings.ring(c.x, c.y, c.z, 3.5, col, 0.6)
     }
@@ -430,9 +332,9 @@ export class Stage {
       if (b.type === 'paint' || b.type === 'cork' || b.type === 'spring') {
         if (nb >= 160) continue
         v.set(b.vx, b.vy, b.vz); const L = v.length() || 1; v.multiplyScalar(1 / L); q.setFromUnitVectors(z, v)
-        if (b.type === 'spring') s.set(1.7, 1.7, 1.7); else if (b.type === 'cork') s.set(0.8, 0.8, 5.5); else s.set(1, 1, 3.6)
+        if (b.type === 'spring') s.set(0.9, 0.9, 0.9); else if (b.type === 'cork') s.set(0.38, 0.38, 4.8); else s.set(0.42, 0.42, 3.0)
         m4.compose(new THREE.Vector3(x, y, zz), q, s); this.bulletM.setMatrixAt(nb, m4)
-        this.bulletM.setColorAt(nb, b.type === 'cork' ? c.setHex(0xe8c080).multiplyScalar(1.3) : b.type === 'spring' ? c.setHex(TEAM_COLORS[b.team] ?? 0xffffff).lerp(_white, 0.55).multiplyScalar(1.4) : (b.bounces > 0 ? c.setHex(0xffd24a).multiplyScalar(1.7) : c.setHex(TEAM_COLORS[b.team] ?? 0xffffff).multiplyScalar(1.6))); nb++
+        this.bulletM.setColorAt(nb, b.type === 'cork' ? c.setHex(0xffd9a0).multiplyScalar(1.5) : b.type === 'spring' ? c.setHex(0xaab0b8).multiplyScalar(1.0) : (b.bounces > 0 ? c.setHex(0xffc060).multiplyScalar(1.7) : c.setHex(0xffe2b0).lerp(_team.setHex(TEAM_COLORS[b.team] ?? 0xffffff), 0.28).multiplyScalar(1.5))); nb++
       } else if (b.type === 'grenade') {
         const g = this.grenades[ng++]; if (!g) continue
         g.visible = true; g.position.set(x, y, zz); g.rotation.x += 0.2; g.rotation.z += 0.15
@@ -503,7 +405,7 @@ export class Stage {
           const sp = Math.hypot(e.vx, e.vz) || 1
           let nx = 0, ny = 0, nz = 0
           if (e.what === 'ground') ny = 1
-          else if (e.what === 'wall') { if (Math.abs(Math.abs(e.x) - WORLD) < 0.5) nx = -Math.sign(e.x); else nz = -Math.sign(e.z) }
+          else if (e.what === 'wall') { const rr = Math.hypot(e.x, e.z) || 1; nx = -e.x / rr; nz = -e.z / rr }
           else { nx = -e.vx / sp; nz = -e.vz / sp }
           if (e.w !== 'confetti') { this.splats.add(e.x, e.y, e.z, nx, ny, nz, col, e.what === 'ground' ? 1.1 : 0.9); this.snd('plop', { vol: this.vol(e.x, e.z, 0.28, 24), rate: 1.2 }) }
           else this.confettiBurst(e.x, e.y, e.z, 5, 4)
@@ -577,7 +479,7 @@ export class Stage {
   }
   firework(e) {
     const fi = this.pFire, sm = this.pSmoke, rnd = Math.random, small = e.how === 'mine'
-    const cols = small ? [0xffc040, 0xff6a20] : [[0xff4a8a, 0xffd23a], [0x4ad0ff, 0xffffff], [0xa0ff5a, 0xffe14a]][(rnd() * 3) | 0]
+    const cols = small ? [0xffc040, 0xff6a20] : [0xffd890, 0xff7a28]
     this.rings.flash(e.x, e.y, e.z, small ? 3.5 : 5, 0xfff3c8, 0.22); this.rings.ring(e.x, e.y - 0.5, e.z, e.r * 1.05, cols[0], 0.55, 0.85)
     const n = small ? 30 : 70
     for (let i = 0; i < n; i++) { const a = rnd() * 6.28, b = Math.acos(rnd() * 2 - 1), u = (small ? 9 : 16) * (0.5 + rnd() * 0.6); fi.emit(e.x, e.y, e.z, Math.sin(b) * Math.sin(a) * u, Math.cos(b) * u + 2, Math.sin(b) * Math.cos(a) * u, 0.9 + rnd() * 0.5, 0.55, 0.12, cols[i % 2], cols[(i + 1) % 2], 1, 6, 1.3) }
@@ -590,11 +492,10 @@ export class Stage {
   updateCamera(S, v, dt, alpha) {
     const cam = this.cam, tp = new THREE.Vector3(), look = new THREE.Vector3()
     let dist = 6.2, h = 3.0, fovT = 64, lookAhead = 9, lh = 1.1
-    if (v.mode === 'orbit') { // タイトル・観戦: 柱にさえぎられない見晴らしの場所を順に回る（ゆっくり流れる）
-      const VP = [[[-22, 11, 52], [4, 0.5, 8]], [[46, 10, 40], [-4, 0.5, -2]], [[-48, 12, -22], [6, 0.5, 6]], [[8, 16, -50], [0, 0.5, 14]]]
-      const k = Math.floor(this.time / 10) % VP.length, f = (this.time % 10) / 10, [p0, l0] = VP[k]
-      tp.set(p0[0] + (l0[0] - p0[0]) * f * 0.12, p0[1] - f * 1.2, p0[2] + (l0[2] - p0[2]) * f * 0.12); look.set(l0[0], l0[1], l0[2]); fovT = 58
-      this.camPos.lerp(tp, Math.min(1, (k !== this._vk ? 1.6 : 8) * dt)); this._vk = k; this.camLook.lerp(look, Math.min(1, 5 * dt)); this.focus.set(0, 0, 0)
+    if (v.mode === 'orbit') { // タイトル・観戦: 夜のアリーナをゆっくり回る
+      const a = this.time * 0.06 + 0.8, R = 80
+      tp.set(Math.sin(a) * R, 24 + Math.sin(this.time * 0.2) * 2, Math.cos(a) * R); look.set(0, 1.5, 0); fovT = 58
+      this.camPos.lerp(tp, Math.min(1, 3 * dt)); this.camLook.lerp(look, Math.min(1, 5 * dt)); this.focus.set(0, 0, 0)
       cam.position.copy(this.camPos); cam.lookAt(this.camLook); cam.fov = lerp(cam.fov, fovT, 0.1); cam.updateProjectionMatrix(); this.updateSun(0, 0); return
     }
     if (v.mode === 'prep') { // 準備: 自分の車のまわりをゆっくり回る
@@ -612,8 +513,8 @@ export class Stage {
       const sp = Math.hypot(c.vx, c.vz)
       if (v.mode === 'drive') { // 車の向きと進む向きの間を見る
         if (sp > 4) { const vy = Math.atan2(c.vx, c.vz); let d = vy - yaw; while (d > Math.PI) d -= 6.283; while (d < -Math.PI) d += 6.283; if (Math.abs(d) < 1.2) yaw += d * 0.35 }
-        dist = 7.4 + Math.min(3.4, sp * 0.1); h = 3.5 + Math.min(1.4, sp * 0.04); lookAhead = 9 + Math.min(10, sp * 0.4); fovT = 64 + Math.min(12, sp * 0.4) + (c.boosting ? 7 : 0)
-      } else { dist = 7.0; h = 3.4; lookAhead = 34; lh = 1.7; fovT = 66 }
+        dist = 6.3 + Math.min(3.2, sp * 0.1); h = 3.1 + Math.min(1.3, sp * 0.04); lookAhead = 9 + Math.min(10, sp * 0.4); fovT = 64 + Math.min(12, sp * 0.4) + (c.boosting ? 7 : 0)
+      } else { dist = 5.9; h = 3.0; lookAhead = 34; lh = 1.7; fovT = 66 }
     }
     if (this.cam.aspect < 1) { const pf = 1 + (1 - this.cam.aspect) * 0.22; dist *= pf; h *= pf * 0.95 }
     // 向きはなめらかに追う
@@ -621,10 +522,14 @@ export class Stage {
     const k = v.mode === 'gun' || v.mode === 'walk' ? 1 : 1 - Math.exp(-5.5 * dt)
     this.camYaw = lerpAng(this.camYaw, yaw, k)
     const sy = Math.sin(this.camYaw), cy = Math.cos(this.camYaw)
-    // 壁や柱の手前に寄せる
+    // 車から後ろへ光線を伸ばし、壁・柱・地面に当たったらその手前まで寄せる（射手でも運転でも）
+    const camAt = dd => [fx - sy * dd, fy + h * (0.55 + 0.45 * dd / dist) + 0.4, fz - cy * dd]
     let d = dist
-    for (; d > 3.4; d -= 0.8) { const x = fx - sy * d, z = fz - cy * d, y = fy + h * (0.55 + 0.45 * d / dist) + 0.4; if (Math.abs(x) < WORLD - 0.6 && Math.abs(z) < WORLD - 0.6 && !solidAtPoint(x, y, z) && y > H(x, z) + 0.6) break }
-    tp.set(fx - sy * d, fy + h * (0.55 + 0.45 * d / dist) + 0.4, fz - cy * d)
+    for (let t = 0.6; t <= dist; t += 0.35) {
+      const [x, y, z] = camAt(t)
+      if (x * x + z * z > (WORLD - 0.5) * (WORLD - 0.5) || solidAtPoint(x, y, z) || solidAtPoint(x, y - 0.5, z) || y < H(x, z) + 0.5) { d = Math.max(2.4, t - 0.7); break }
+    }
+    { const [cx, cy2, cz] = camAt(d); tp.set(cx, cy2, cz) }
     tp.y = Math.max(tp.y, H(tp.x, tp.z) + 1.0)
     look.set(fx + sy * lookAhead, fy + lh, fz + cy * lookAhead)
     if (v.snap) { this.camPos.copy(tp); this.camLook.copy(look) }
@@ -637,12 +542,25 @@ export class Stage {
     this.focus.set(fx, fy, fz); this.updateSun(fx, fz)
   }
   updateSun(x, z) { this.sun.position.set(x + this.sunOff.x, this.sunOff.y, z + this.sunOff.z); this.sun.target.position.set(x, 0, z); this.sun.target.updateMatrixWorld() }
+  // 画面の真ん中の印が指す所（光線を伸ばして、地面・障害物・車・壁に当たった点）
+  aimPoint(S, me, maxD = 150) {
+    this.cam.updateMatrixWorld(); const o = this.cam.position, d = this.cam.getWorldDirection(_aimDir)
+    for (let t = 2.5; t < maxD; t += 0.7) {
+      const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t
+      if (x * x + z * z > WORLD * WORLD) return { x, y, z, t, hit: 'wall' }
+      if (y < H(x, z)) return { x, y, z, t, hit: 'ground' }
+      if (solidAtPoint(x, y, z)) return { x, y, z, t, hit: 'obst' }
+      for (const c of S.cars) { if (c === me || !c.alive || Math.abs(y - (c.y + 1.0)) > 1.5) continue; for (const [cx, cz] of circles(c)) if (Math.hypot(x - cx, z - cz) < carR(c) + 0.15) return { x, y, z, t, hit: 'car', car: c } }
+    }
+    return { x: o.x + d.x * maxD, y: o.y + d.y * maxD, z: o.z + d.z * maxD, t: maxD, hit: 'none' }
+  }
   project(x, y, z, out) { out.set(x, y, z).project(this.cam); return out }
   render() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.cam) }
   clearDynamic() { this.splats.clear(); this.marks.clear(); this.pSmoke.clear(); this.pFire.clear(); for (const [, v] of this.cars) this.dropCar(v); this.cars.clear(); this.camYaw = undefined }
 }
-const _scorch = new THREE.Color(0x1c1a18), _white = new THREE.Color(0xffffff)
-const CONF = [0xff4a8a, 0xffd23a, 0x4ad0ff, 0xa0ff5a, 0xff7a2a, 0xffffff, 0xb07aff]
-const PICKC = { turbo: 0xf08a1e, spear: 0xf08a1e, oil: 0xf08a1e, mine: 0xf08a1e, repair: 0x2f9e57, grenade: 0x1fa6cf, flash: 0x1fa6cf, smoke: 0x1fa6cf, ricochet: 0x1fa6cf, turret: 0x1fa6cf }
+const _aimDir = new THREE.Vector3()
+const _scorch = new THREE.Color(0x1c1a18), _white = new THREE.Color(0xffffff), _team = new THREE.Color()
+const CONF = [0x6b6258, 0x8a7a62, 0x4a4a48, 0x9a8f7c, 0x575149, 0xb0a48c]
+const PICKC = { turbo: 0xd98a3a, spear: 0xd98a3a, oil: 0xd98a3a, mine: 0xd98a3a, repair: 0x3c9a63, grenade: 0x3a9fbe, flash: 0x3a9fbe, smoke: 0x3a9fbe, ricochet: 0x3a9fbe, turret: 0x3a9fbe }
 const ROLE_G = new Set(['grenade', 'flash', 'smoke', 'ricochet', 'turret'])
 const BOXG = new THREE.BoxGeometry(1.15, 1.15, 1.15), SPHG = new THREE.SphereGeometry(0.78, 18, 14)

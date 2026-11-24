@@ -55,4 +55,4 @@
 - snd/amb2.mp3: 100 CC0 SFX #2 / rubberduck / CC0
 - snd/spring3.mp3: 100 CC0 SFX / rubberduck / CC0
 - snd/eng_idle.wav・eng_mid.wav・eng_high.wav: racing car engine sound loops（loop_0・loop_3_0・loop_5_0）/ domasx2 / CC0（回転数で重ねて混ぜる）
-- snd/bgm_suno.mp3: 音楽: Suno で作成（作者のアカウント）。つなぎ目を重ねたループ版
+- snd/music.mp3: 音楽: Suno で作成（作者のアカウント）。つなぎ目を重ねたループ版

@@ -9,8 +9,8 @@ export const RAMPS = [
   { x: 18, z: 52, ang: Math.PI, len: 12, w: 8, h: 3.3 },
   { x: -6, z: -34, ang: 0, len: 12, w: 8, h: 3.3 },
   // 外のヤード: 外周路の直線に大きなジャンプ台
-  { x: -26, z: -98, ang: Math.PI / 2, len: 15, w: 9, h: 4.2 }, { x: 26, z: 98, ang: -Math.PI / 2, len: 15, w: 9, h: 4.2 },
-  { x: 98, z: -26, ang: 0, len: 15, w: 9, h: 4.2 }, { x: -98, z: 26, ang: Math.PI, len: 15, w: 9, h: 4.2 },
+  { x: -26, z: -98, ang: Math.PI / 2, len: 14, w: 9, h: 5.4 }, { x: 26, z: 98, ang: -Math.PI / 2, len: 14, w: 9, h: 5.4 },
+  { x: 98, z: -26, ang: 0, len: 14, w: 9, h: 5.4 }, { x: -98, z: 26, ang: Math.PI, len: 14, w: 9, h: 5.4 },
   { x: 74, z: 62, ang: Math.PI, len: 12, w: 8, h: 3.3 }, { x: -74, z: -62, ang: 0, len: 12, w: 8, h: 3.3 },
 ]
 // 上の通路（北の壁沿い）。両端が坂
@@ -65,7 +65,7 @@ export const CONT_COLORS = [0xb5442f, 0x2f5e9c, 0x3f7b4a, 0xc99a2a, 0x7a7e82, 0x
   for (const [x, z, ax, st] of [[84, -94, true, 1], [84, -88, true, 1], [96, -84, false, 2]]) cont(x, z, ax, st)
 }
 // 木箱・機械をヤードにも
-for (const [x, z, w, d, h, k] of [[-62, 70, 4, 4, 3, 'crate'], [-66, 74, 4, 4, 3, 'crate'], [64, 40, 4, 4, 3, 'crate'], [66, -56, 5, 5, 3, 'crate'], [-70, 40, 14, 5, 4.5, 'machine'], [36, 98, 12, 5, 4.5, 'machine'], [-36, -100, 12, 5, 4.5, 'machine']]) BOXES.push({ x, z, w, d, h, kind: k })
+for (const [x, z, w, d, h, k] of [[-62, 70, 4, 4, 3, 'crate'], [-66, 74, 4, 4, 3, 'crate'], [64, 40, 4, 4, 3, 'crate'], [66, -56, 5, 5, 3, 'crate'], [-70, 40, 14, 5, 4.5, 'machine'], [48, 86, 12, 5, 4.5, 'machine'], [-48, -88, 12, 5, 4.5, 'machine']]) BOXES.push({ x, z, w, d, h, kind: k })
 
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v
 export function bowlH(x, z) {

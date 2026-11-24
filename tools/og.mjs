@@ -13,11 +13,11 @@ await p.goto(`http://localhost:${PORT}/?auto=1&start=drive&seed=${process.argv[2
 await p.evaluate(() => { __bb.setSpeed(0) })
 const found = await p.evaluate(() => {
   const st = __bb.stage, orig = st.onEvent.bind(st); window.__ex = null
-  st.onEvent = (e, S) => { orig(e, S); if (e.k === 'explode' && !window.__ex && S.t > 20) window.__ex = e }
+  st.onEvent = (e, S) => { orig(e, S); if (e.k === 'explode' && !window.__ex && S.t > 20 && Math.abs(e.x) < 80 && Math.abs(e.z) < 80) window.__ex = e }
   for (let i = 0; i < 60 * 200 && !window.__ex; i++) __bb.advance(1)
   const e = window.__ex; if (!e) return null
   // 爆発の斜め前から。右に寄せて左に題名の余白を作る
-  window.__bbCam = { p: [e.x + 11, e.y + 6, e.z + 15], l: [e.x - 3.5, e.y + 1.5, e.z], fov: 52 }
+  window.__bbCam = { p: [e.x - 9, e.y + 5, e.z + 13], l: [e.x + 3.5, e.y + 1.5, e.z], fov: 52 }
   return { t: __bb.S().t, x: e.x, z: e.z }
 })
 console.log('found', found)

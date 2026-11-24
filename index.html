@@ -12,11 +12,11 @@
 <meta property="og:url" content="https://tom3games.github.io/bang-bumpers/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://tom3games.github.io/bang-bumpers/">
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 fill=%27%23171614%27/%3E%3Cpath d=%27M3 22l6-10h14l6 10z%27 fill=%27%23f2c230%27/%3E%3Ccircle cx=%2710%27 cy=%2724%27 r=%273.5%27 fill=%27%23e6e1d4%27/%3E%3Ccircle cx=%2722%27 cy=%2724%27 r=%273.5%27 fill=%27%23e6e1d4%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 <style>[hidden]{display:none!important}</style>
 <script>
@@ -56,6 +56,7 @@
     <p class="tape" data-en="<b>One drives, one shoots.</b> <b>Last team rolling wins.</b>"><b>1人が運転、1人が撃つ。</b><b>最後まで走っていたチームの勝ち。</b></p>
   </div>
   <div class="pick">
+    <label class="pname"><span data-en="NAME">なまえ</span><input id="pName" maxlength="8" autocomplete="off" spellcheck="false" placeholder="あなた" data-en-ph="You"></label>
     <p class="q" data-en="Pick your seat. A CPU partner takes the other.">どっちに乗る？もう1人はCPUが乗る</p>
     <div class="seats">
       <button id="goDrive" class="seat"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="22" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="32" cy="32" r="5" fill="currentColor"/><path d="M32 37v17M27 31L10 38M37 31l17 7" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg><b data-en="DRIVE">運転する</b><span data-en="Ram them. Your partner shoots.">体当たり担当。相棒が撃つ</span></button>
@@ -65,6 +66,7 @@
   <div class="how">
     <dl class="pc">
       <dt>W S A D</dt><dd data-en="Gas · Brake/Reverse · Steer (Shift = boost)">アクセル・ブレーキ/バック・ハンドル（Shift でブースト）</dd>
+      <dt>Space</dt><dd data-en="Handbrake drift (driver)">サイドブレーキでドリフト（運転）</dd>
       <dt>X · Tab · 1 2</dt><dd data-en="Swap guns (shooter)">銃の持ち替え（射手）</dd>
       <dt data-en="Mouse · Click">マウス・クリック</dt><dd data-en="Aim · Fire (A D also turns the aim)">ねらう・撃つ（A D でも向きを変えられる）</dd>
       <dt>R · E · Q</dt><dd data-en="Reload · Use item · Swap seats (stopped for 3 s)">リロード・アイテム・役を交代（止まって3秒）</dd>
@@ -78,7 +80,7 @@
   <div class="foot">
     <button id="muteT" class="mini" aria-label="音"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9z" fill="currentColor"/><path class="on" d="M16 8a5 5 0 010 8M19 5a9 9 0 010 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <button id="langT" class="mini txt">EN</button>
-    <p class="cred" data-en="Sounds: CC0 recordings (see CREDITS)">音: CC0の録音素材（CREDITSに記載）</p>
+    <p class="cred" data-en="Sounds: CC0 recordings · music by the author (see CREDITS)">音: CC0の録音素材・音楽は作者の制作（CREDITSに記載）</p>
   </div>
 </section>
 
@@ -90,7 +92,6 @@
   <div id="pcards"></div>
   <div class="pfoot">
     <div id="pmate"><span class="lab" data-en="PARTNER (CPU)">相棒（CPU）</span><b id="pmName"></b><em id="pmPick"></em></div>
-    <label class="pname"><span data-en="NAME">なまえ</span><input id="pName" maxlength="8" autocomplete="off" spellcheck="false" placeholder="あなた"></label>
   </div>
   <p class="pnote" data-en="It starts random. Tap to change.">はじめはランダム。タップで変えられる</p>
 </section>
@@ -120,12 +121,12 @@
     <button id="bGas" class="rb gas" aria-label="アクセル" data-role="drive"><svg viewBox="0 0 48 64"><rect x="8" y="4" width="32" height="56" rx="8"/><path d="M15 16h18M15 26h18M15 36h18M15 46h18"/></svg><span>アクセル</span></button>
     <button id="bBack" class="rb back" aria-label="バック" data-role="drive"><svg viewBox="0 0 48 48"><path d="M30 12H18a8 8 0 000 16h12M14 20l-6 8 6 8"/><path d="M26 40h14" /></svg><span>バック</span></button>
     <button id="bHb" class="rb hb" aria-label="サイドブレーキ" data-role="drive"><svg viewBox="0 0 48 48"><path d="M10 34c8-4 20-4 28 0M14 24c6-3 14-3 20 0"/><circle cx="24" cy="14" r="4"/></svg><span>ドリフト</span></button>
-    <button id="bBoost" class="rb boost" aria-label="ブースト" data-role="drive"><svg viewBox="0 0 48 48"><path d="M27 4L10 27h11l-3 17 20-25H26z"/></svg></button>
+    <button id="bBoost" class="rb boost" aria-label="ブースト" data-role="drive"><svg viewBox="0 0 48 48"><path d="M27 4L10 27h11l-3 17 20-25H26z"/></svg><span>ブースト</span></button>
     <button id="bFire" class="rb fire" aria-label="撃つ" data-role="shoot"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="14"/><path d="M24 4v10M24 34v10M4 24h10M34 24h10"/><circle cx="24" cy="24" r="3.5" class="f"/></svg></button>
     <button id="bReload" class="rb reload" aria-label="リロード" data-role="shoot"><svg viewBox="0 0 48 48"><path d="M38 24a14 14 0 11-5-10.6"/><path d="M36 5v10H26" /></svg></button>
-    <button id="bItem" class="rb item" aria-label="アイテム" data-role="both"><svg viewBox="0 0 48 48"><rect x="9" y="17" width="30" height="24" rx="3"/><path d="M9 25h30M24 17v24M24 17c-4-9-12-6-9 0M24 17c4-9 12-6 9 0"/></svg></button>
-    <button id="bWswap" class="rb wswap" aria-label="銃の持ち替え" data-role="shoot"><svg viewBox="0 0 48 48"><path d="M10 18h22l-5-5M38 30H16l5 5"/></svg><span>持ち替え</span></button>
-    <button id="bSwap" class="rb swap" aria-label="役を交代" data-role="both"><svg viewBox="0 0 48 48"><path d="M8 18h28l-7-7M40 30H12l7 7"/></svg></button>
+    <button id="bItem" class="rb item" aria-label="アイテム" data-role="both"><svg viewBox="0 0 48 48"><rect x="9" y="17" width="30" height="24" rx="3"/><path d="M9 25h30M24 17v24M24 17c-4-9-12-6-9 0M24 17c4-9 12-6 9 0"/></svg><span>アイテム</span></button>
+    <button id="bWswap" class="rb wswap" aria-label="銃の持ち替え" data-role="shoot"><svg viewBox="0 0 48 48"><rect x="8" y="20" width="26" height="9" rx="2"/><path d="M34 24h8M18 12l6-6 6 6M18 38l6 6 6-6"/></svg><span>持ち替え</span></button>
+    <button id="bSwap" class="rb swap" aria-label="役を交代" data-role="both"><svg viewBox="0 0 48 48"><path d="M8 18h28l-7-7M40 30H12l7 7"/></svg><span>席替え</span></button>
     <button id="bMute" class="rb mute" aria-label="音"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9z"/><path class="on" d="M16 8a5 5 0 010 8M19 5a9 9 0 010 14"/></svg></button>
   </div>
 </section>
@@ -136,13 +137,13 @@
     <p class="verdict" id="rkV">最後まで走りきった</p>
     <ol id="rkList"></ol>
     <p class="st" id="rkSt"></p>
-    <div class="acts"><button id="btnAgain">もう一回</button><button id="btnPost" class="ghost">Xでポスト</button></div>
+    <div class="acts"><button id="btnAgain">もう一回</button><button id="btnSeat" class="ghost">席を替えて</button><button id="btnTitle" class="ghost">タイトルへ</button><button id="btnPost" class="ghost">Xでポスト</button></div>
   </div>
 </section>
 <div id="err"></div>
 
 <script src="js/sfx.js"></script>
-<script type="module" src="js/main.js?v=1"></script>
-<script src="support.js?v=1" data-ja="ガソリン" data-en="some gas"></script>
+<script type="module" src="js/main.js?v=2"></script>
+<script src="support.js?v=2" data-ja="ガソリン" data-en="some gas"></script>
 </body>
 </html>

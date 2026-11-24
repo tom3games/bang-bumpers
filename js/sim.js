@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js'
+import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=2'
 
 export const DT = 1 / 60
 export const G = 24
@@ -15,10 +15,10 @@ export const CAR_R = 1.15, CAR_OFF = 0.95, CAR_H = 1.7
 export const MAXF = 21, MAXR = 8, BOOST_MAXF = 31
 // 銃（射手が2つ選んで持ち替える）
 export const WEAPONS = {
-  paint: { name: 'ペイント弾', kind: 'gun', speed: 58, dmg: 2.6, life: 1.3, cd: 0.105, mag: 36, reload: 1.7, stat: [3, 5, 3] },
+  paint: { name: 'ペイント弾', kind: 'gun', speed: 58, dmg: 3.6, life: 1.3, cd: 0.105, mag: 36, reload: 1.7, stat: [3, 5, 3] },
   rocket: { name: '花火ロケット', kind: 'rocket', speed: 30, dmg: 27, r: 7.5, life: 2.6, cd: 0.95, mag: 3, reload: 4.2, stat: [4, 1, 4] },
-  confetti: { name: '紙吹雪', kind: 'confetti', speed: 44, dmg: 2.3, life: 0.5, n: 9, spread: 0.17, cd: 0.6, mag: 5, reload: 2.4, stat: [4, 2, 1] },
-  spring: { name: 'バネの鉄球', kind: 'spring', speed: 34, dmg: 13, life: 2.8, cd: 0.5, mag: 6, reload: 2.4, bounces: 3, stat: [4, 2, 3] },
+  confetti: { name: '紙吹雪', kind: 'confetti', speed: 44, dmg: 3.0, life: 0.5, n: 9, spread: 0.17, cd: 0.6, mag: 5, reload: 2.4, stat: [4, 2, 1] },
+  spring: { name: 'バネの鉄球', kind: 'spring', speed: 34, dmg: 21, life: 2.8, cd: 0.5, mag: 6, reload: 2.4, bounces: 3, stat: [4, 2, 3] },
   cork: { name: 'コルク砲', kind: 'cork', speed: 95, dmg: 20, life: 1.1, cd: 0.8, mag: 5, reload: 2.6, stat: [5, 2, 5] },
 }
 export const WEAPON_IDS = ['paint', 'rocket', 'confetti', 'spring', 'cork']
@@ -250,8 +250,8 @@ function stepBody(S, c, dt, inp, boosting) {
     const spN = clamp(Math.abs(sp) / Math.max(10, vmax), 0, 1.3)
     const maxSteer = (0.62 - 0.4 * clamp(Math.abs(sp) / 30, 0, 1)) * T.steer
     const under = 1 - 0.42 * clamp(spN * spN * Math.abs(c.steer) * 1.4, 0, 1)         // 速い時に強く切ると前輪が負けて外へふくらむ
-    const hard = Math.abs(c.steer) > 0.62 && Math.abs(sp) > 0.55 * vmax && thrIn > 0.3  // 速い時の大きな舵は後ろが流れる
-    let yawT = sp * Math.tan(c.steer * maxSteer) / 2.7 * under * (hard ? 1.16 : 1) * (1 + 0.55 * c.hb)
+    const hard = clamp((Math.abs(c.steer) - 0.5) / 0.25, 0, 1) * clamp((Math.abs(sp) / vmax - 0.45) / 0.2, 0, 1) * (thrIn > 0.3 ? 1 : 0)  // 速い時の大きな舵は後ろが流れる（なめらかに効く）
+    let yawT = sp * Math.tan(c.steer * maxSteer) / 2.7 * under * (1 + 0.16 * hard) * (1 + 0.55 * c.hb)
     c.yawRate += (yawT - c.yawRate) * (1 - Math.exp(-dt / T.yawTau))
     c.yaw -= c.yawRate * dt
     ;[fx, fz] = fwd(c)
@@ -271,17 +271,18 @@ function stepBody(S, c, dt, inp, boosting) {
       } else if (c.brk > 0.05) {
         if (sp > 0.6) ax = -T.brake * c.brk; else ax = -10 * c.brk * (sp > -MAXR ? 1 : 0)
       } else {
-        const drag = (inp ? T.roll : 6) + 0.0028 * sp * sp   // 離すと転がる。重い車ほど長く転がる
+        const drag = (inp ? T.roll * 1.45 : 6) + 0.0036 * sp * sp   // 離すと転がる。重い車ほど長く転がる
         ax = -Math.sign(sp) * Math.min(Math.abs(sp) / Math.max(dt, 1e-3), drag)
       }
+      if (sp > vmax && ax < -5) ax = -5   // ブーストが切れた後は、ゆるやかに通常の最高速へ
       sp = Math.min(sp + ax * dt, Math.max(sp, vmax))
     } else sp -= Math.sign(sp) * Math.min(Math.abs(sp), 14 * dt)
     c.ax = ax
     // 横の滑り: 一気には止まらず、グリップが戻るまで流れる
     let grip = c.oilT > 0 ? 0.5 : T.grip
-    grip *= (1 - 0.42 * clamp(Math.abs(c.steer) * Math.abs(sp) / 20, 0, 1) * (hard ? 1.35 : 1)) * (1 - 0.86 * c.hb)
-    if (c.hb > 0.3) sp -= Math.sign(sp) * 2.2 * c.hb * dt
-    lat *= Math.exp(-grip * dt)
+    grip *= (1 - 0.42 * clamp(Math.abs(c.steer) * Math.abs(sp) / 20, 0, 1) * (1 + 0.35 * hard)) * (1 - 0.86 * c.hb)
+    if (c.hb > 0.3) sp -= Math.sign(sp) * 0.9 * c.hb * dt
+    { const lat0 = lat; lat *= Math.exp(-grip * dt); if (sp > 2) sp += (Math.abs(lat0) - Math.abs(lat)) * 0.55 }   // 消した横の速さの一部は前へ戻る（曲がっても失速しすぎない）
     if (c.oilT > 0 && inp) c.yaw += (Math.sin(S.t * 7 + c.id) * 0.9) * dt * (Math.abs(sp) / 12)
     c.slip = Math.abs(lat)
     c.vx = fx * sp + rx * lat; c.vz = fz * sp + rz * lat
@@ -354,7 +355,7 @@ function stepBody(S, c, dt, inp, boosting) {
 }
 
 // ダメージ（車）。by は相手のチーム番号（null なら自爆）
-const HOW_K = { bullet: 0.46, ram: 0.56, rocket: 0.9, mine: 0.9 }
+const HOW_K = { bullet: 0.46, ram: 0.56, rocket: 0.42, mine: 0.9 }
 export function hurt(S, c, dmg, by, x, z, how) {
   if (!c.alive || dmg <= 0 || c.invT > 0 || S.phase !== 'play' || S.over) return 0
   dmg *= (HOW_K[how] ?? 0.6) / (CAR_TYPES[c.type] || CAR_TYPES[0]).dur * (1 + clamp((S.tMatch - 120) / 240, 0, 0.6))
@@ -510,7 +511,7 @@ export function explode(S, x, y, z, by, R, dmg, how) {
     const self = c.team === by ? 0.35 : 1
     if (c.alive) hurt(S, c, dmg * Math.pow(k, 0.7) * self, c.team === by ? null : by, x, z, how)
     const dd = Math.max(0.5, Math.hypot(dx, dz))
-    if (c.alive || true) { c.vx += dx / dd * 16 * k; c.vz += dz / dd * 16 * k; if (c.alive && !c.air) { c.vy = 5 + 7 * k; c.air = true; c.airT = 0 } }
+    if (c.alive || true) { c.vx += dx / dd * 16 * k; c.vz += dz / dd * 16 * k; if (c.alive && !c.air) { c.vy = 3 + 4 * k; c.air = true; c.airT = 0 } }
     if (!c.alive) c.spin += 1
   }
   for (const p of S.people) {

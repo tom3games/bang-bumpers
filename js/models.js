@@ -1,6 +1,6 @@
 // 車と人の見た目。おもちゃのバンパーカー。曲面の車体・太いタイヤ・屋根の射手台・旗
 import * as THREE from 'three'
-import { numberTexture, grimeTexture } from './textures.js'
+import { numberTexture, grimeTexture } from './textures.js?v=2'
 import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js'
 
 const cache = {}
@@ -42,7 +42,7 @@ export class Baker {
     if (color !== null) { const n = g.attributes.position.count, a = new Float32Array(n * 3); _c.setHex(color); for (let i = 0; i < n; i++) { a[i * 3] = _c.r; a[i * 3 + 1] = _c.g; a[i * 3 + 2] = _c.b } g.setAttribute('color', new THREE.BufferAttribute(a, 3)) }
     this.geos.push(g); return this
   }
-  mesh(mat, shadow = true) { if (!this.geos.length) return null; const o = new THREE.Mesh(mergeGeometries(this.geos), mat); o.castShadow = shadow; o.receiveShadow = true; return o }
+  mesh(mat, shadow = true) { if (!this.geos.length) return null; const o = new THREE.Mesh(mergeGeometries(this.geos), mat); o.geometry.userData.own = true; o.castShadow = shadow; o.receiveShadow = true; return o }
 }
 let TRIM, LIGHTM, GRIME
 export function buildCar(color, num = 1, type = 0) {
@@ -127,7 +127,8 @@ export function buildCar(color, num = 1, type = 0) {
   // 空き車の目印（黄色い灯り）
   const beacon = new THREE.Mesh(G('beacon', () => new THREE.CylinderGeometry(0.12, 0.16, 0.22, 10)), new THREE.MeshStandardMaterial({ color: 0xffb000, emissive: 0xffa000, emissiveIntensity: 1.2 }))
   beacon.position.set(0, 2.2, -0.3); beacon.visible = false; body.add(beacon)
-  return { g: root, body, spear, paint, parts, wheels, turret, gun: { flash, helm: helmG }, drv: { helm: helmD }, hood, hoodPivot, flag, bumpF, bumpB, beacon, fl, glass: gm, base: new THREE.Color(color), num }
+  const own = [paint, helmG.material, helmD.material, flag.material, nm, nt, beacon.material, flash.material]
+  return { own, g: root, body, spear, paint, parts, wheels, turret, gun: { flash, helm: helmG }, drv: { helm: helmD }, hood, hoodPivot, flag, bumpF, bumpB, beacon, fl, glass: gm, base: new THREE.Color(color), num }
 }
 
 // 歩く人（全身。足と腕が動く）

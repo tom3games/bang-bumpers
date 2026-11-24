@@ -1,14 +1,14 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 import * as THREE from 'three'
-import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS, POLES, BOXES, H, bowlH, solidAtPoint, SPARE_SPOTS } from './arena.js'
-import * as TX from './textures.js'
-import { buildCar, buildWalker, rbox, Baker } from './models.js'
-import { Particles, Splats, Debris, Rings } from './fx.js'
+import { HALF, WORLD, BOWL, RAMPS, DECK, DOORS, POLES, BOXES, H, bowlH, solidAtPoint, SPARE_SPOTS } from './arena.js?v=2'
+import * as TX from './textures.js?v=2'
+import { buildCar, buildWalker, rbox, Baker } from './models.js?v=2'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=2'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES } from './sim.js'
+import { TEAM_COLORS, MAXF, CAR_TYPES } from './sim.js?v=2'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
@@ -221,7 +221,7 @@ export class Stage {
     const S = this.scene, tri = new THREE.BufferGeometry(); tri.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.7, 0, 0, 0.7, 0, 0, 0, -1.3, 0]), 3)); tri.computeVertexNormals()
     const im = new THREE.InstancedMesh(tri, new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide }), 80), m4 = new THREE.Matrix4(), c = new THREE.Color()
     let k = 0
-    for (const zz of [-24, 24]) for (let i = 0; i < 40; i++) { const x = -58 + i * 2.95; m4.makeTranslation(x, 20.2 + Math.sin(i * 1.3) * 0.12, zz); im.setMatrixAt(k, m4); im.setColorAt(k, c.setHex(TEAM_COLORS[i % 5])); k++ }
+    for (const zz of [-24, 24]) for (let i = 0; i < 40; i++) { if ((i * 7 + (zz > 0 ? 3 : 0)) % 11 === 0) continue; const x = -58 + i * 2.95 + Math.sin(i * 2.1) * 0.25, sag = Math.sin((i / 39) * Math.PI) * 1.6, sc = 0.8 + ((i * 13) % 5) * 0.1; m4.compose(new THREE.Vector3(x, 20.8 - sag + Math.sin(i * 1.3) * 0.1, zz), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.sin(i * 1.7) * 0.18)), new THREE.Vector3(sc, sc, sc)); im.setMatrixAt(k, m4); im.setColorAt(k, c.setHex(TEAM_COLORS[(i * 3 + (zz > 0 ? 2 : 0)) % 5])); k++ }
     im.count = k; S.add(im)
     const bl = new Baker(); for (const zz of [-24, 24]) bl.add(new THREE.CylinderGeometry(0.03, 0.03, 118, 4), 0, 20.25, zz, 0x222222, 0, 0, Math.PI / 2)
     S.add(bl.mesh(new THREE.MeshBasicMaterial({ vertexColors: true }), false))
@@ -299,7 +299,7 @@ export class Stage {
   // ---------------------------------------------------------------- 車の見た目を作る・直す
   carView(c) {
     let v = this.cars.get(c.id)
-    if (v && v.type !== c.type) { this.scene.remove(v.g); this.cars.delete(c.id); v = null }
+    if (v && v.type !== c.type) { this.dropCar(v); this.cars.delete(c.id); v = null }
     if (!v) {
       const team = c.team
       const col = team >= 0 ? TEAM_COLORS[team] : [0xd9d6cc, 0x7b8085, 0x9a6a40, 0x4a5a78, 0x8fa35a, 0xcfc095][c.id % 6]
@@ -372,7 +372,7 @@ export class Stage {
       if (c.boosting) { this.shake = Math.max(this.shake, 0.1) }
       if (c.boosting) { for (let i = 0; i < 2; i++) this.pFire.emit(x - Math.sin(c.yaw) * 2.2 + (Math.random() - 0.5) * 0.4, y + 0.55, z - Math.cos(c.yaw) * 2.2 + (Math.random() - 0.5) * 0.4, -Math.sin(c.yaw) * 7, 0.3, -Math.cos(c.yaw) * 7, 0.25, 0.9, 0.2, 0xffb04a, 0xff4a10, 0.9, 0, 3) }
     }
-    for (const [id, v] of this.cars) if (!seen.has(id)) { this.scene.remove(v.g); this.cars.delete(id) }
+    for (const [id, v] of this.cars) if (!seen.has(id)) { this.dropCar(v); this.cars.delete(id) }
     this.syncPeople(S, alpha, dt, ctx)
     this.syncBullets(S, alpha, dt)
     this.syncThings(S, dt)
@@ -475,6 +475,8 @@ export class Stage {
     for (const m of S.smokes) { const k = Math.min(1, m.life / 2); for (let i = 0; i < 3; i++) { const a = Math.random() * 6.28, r = Math.random() * m.r * 0.8; this.pSmoke.emit(m.x + Math.sin(a) * r, m.y + 0.5 + Math.random() * 3.5, m.z + Math.cos(a) * r, (Math.random() - 0.5) * 0.8, 0.4, (Math.random() - 0.5) * 0.8, 3.4, 3.5, 6, 0xdfe3e6, 0xc2c7cc, 0.5 * k, 0, 0.3) } }
   }
   // ---------------------------------------------------------------- 出来事 → 演出と音
+  // 捨てる車の見た目を解放する（長い配信でメモリが増えないように）
+  dropCar(v) { this.scene.remove(v.g); v.g.traverse(o => { if (o.geometry && o.geometry.userData && o.geometry.userData.own) o.geometry.dispose() }); for (const m of v.own || []) { if (m && m.map && m.map.dispose) m.map.dispose(); if (m && m.dispose) m.dispose() } }
   dist(x, z) { return Math.hypot(x - this.focus.x, z - this.focus.z) }
   vol(x, z, base = 1, r = 26) { return base / (1 + (this.dist(x, z) / r) ** 2) }
   onEvent(e, S) {
@@ -568,7 +570,7 @@ export class Stage {
     if (v) { for (let i = 0; i < v.fl.length; i++) this.fling(v, e.x, e.z, 16)
       for (const w of v.wheels) { const p = new THREE.Vector3(); w.spin.getWorldPosition(p); const m = w.spin; this.debris.fling(m, new THREE.Vector3((rnd() - 0.5) * 16, 8 + rnd() * 8, (rnd() - 0.5) * 16), 18); void p } }
     this.snd('boom', { vol: this.vol(e.x, e.z, 1, 40), rate: 0.9 + rnd() * 0.2 }); this.snd('debris', { vol: this.vol(e.x, e.z, 0.6, 34), delay: 0.15 })
-    this.addShake(e.x, e.z, 1.2); this.hitStop = 0.07
+    this.addShake(e.x, e.z, 1.2); if (this.dist(e.x, e.z) < 26) this.hitStop = 0.06
   }
   firework(e) {
     const fi = this.pFire, sm = this.pSmoke, rnd = Math.random, small = e.how === 'mine'
@@ -595,6 +597,7 @@ export class Stage {
     if (v.mode === 'prep') { // 準備: 自分の車のまわりをゆっくり回る
       const c = v.car, a = this.time * 0.45 + 0.6, R = 9.5
       tp.set(c.x + Math.sin(a) * R, c.y + 3.6, c.z + Math.cos(a) * R); look.set(c.x, c.y + 1.2, c.z)
+      if (cam.aspect < 1) look.y -= 2.6   // 縦画面では札の上に車が見えるよう、少し下を見る
       this.camPos.lerp(tp, Math.min(1, 6 * dt)); this.camLook.lerp(look, Math.min(1, 8 * dt)); this.focus.set(c.x, c.y, c.z)
       cam.position.copy(this.camPos); cam.lookAt(this.camLook); cam.fov = lerp(cam.fov, 50, 0.1); cam.updateProjectionMatrix(); this.updateSun(c.x, c.z); return
     }
@@ -633,7 +636,7 @@ export class Stage {
   updateSun(x, z) { this.sun.position.set(x + this.sunOff.x, this.sunOff.y, z + this.sunOff.z); this.sun.target.position.set(x, 0, z); this.sun.target.updateMatrixWorld() }
   project(x, y, z, out) { out.set(x, y, z).project(this.cam); return out }
   render() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.cam) }
-  clearDynamic() { this.splats.clear(); this.marks.clear(); this.pSmoke.clear(); this.pFire.clear(); for (const [, v] of this.cars) this.scene.remove(v.g); this.cars.clear(); this.camYaw = undefined }
+  clearDynamic() { this.splats.clear(); this.marks.clear(); this.pSmoke.clear(); this.pFire.clear(); for (const [, v] of this.cars) this.dropCar(v); this.cars.clear(); this.camYaw = undefined }
 }
 const _scorch = new THREE.Color(0x1c1a18), _white = new THREE.Color(0xffffff)
 const CONF = [0xff4a8a, 0xffd23a, 0x4ad0ff, 0xa0ff5a, 0xff7a2a, 0xffffff, 0xb07aff]

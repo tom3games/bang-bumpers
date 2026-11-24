@@ -2,32 +2,48 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, HALF, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp } from './arena.js'
+import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp } from './arena.js'
 
 export const DT = 1 / 60
 export const G = 24
-export const MATCH_SEC = 210
-export const COUNTDOWN = 3.2
+export const MATCH_SEC = 240
+export const COUNTDOWN = 10
 export const STOCK = 3
 export const TEAM_NAMES = ['あか', 'あお', 'きいろ', 'みどり', 'もも']
 export const TEAM_COLORS = [0xe8452e, 0x2f78e6, 0xf2c230, 0x38b25a, 0xe05cb4]
 export const CAR_R = 1.15, CAR_OFF = 0.95, CAR_H = 1.7
 export const MAXF = 21, MAXR = 8, BOOST_MAXF = 31
+// 銃（射手が2つ選んで持ち替える）
 export const WEAPONS = {
-  paint: { name: 'ペイント弾', speed: 58, dmg: 2.6, life: 1.3, cd: 0.105, mag: 36, reload: 1.7 },
-  confetti: { name: '紙吹雪', speed: 44, dmg: 3.1, life: 0.5, n: 9, spread: 0.17 },
-  rocket: { name: '花火ロケット', speed: 30, dmg: 34, r: 7.5, life: 2.6 },
+  paint: { name: 'ペイント弾', kind: 'gun', speed: 58, dmg: 2.6, life: 1.3, cd: 0.105, mag: 36, reload: 1.7, stat: [3, 5, 3] },
+  rocket: { name: '花火ロケット', kind: 'rocket', speed: 30, dmg: 34, r: 7.5, life: 2.6, cd: 0.7, mag: 3, reload: 3.6, stat: [5, 1, 4] },
+  confetti: { name: '紙吹雪', kind: 'confetti', speed: 44, dmg: 3.1, life: 0.5, n: 9, spread: 0.17, cd: 0.6, mag: 5, reload: 2.4, stat: [4, 2, 1] },
+  spring: { name: 'バネの鉄球', kind: 'spring', speed: 34, dmg: 9, life: 2.8, cd: 0.5, mag: 6, reload: 2.4, bounces: 3, stat: [3, 2, 3] },
+  cork: { name: 'コルク砲', kind: 'cork', speed: 95, dmg: 12, life: 1.1, cd: 0.75, mag: 5, reload: 2.6, stat: [4, 2, 5] },
 }
-export const ITEM_AMMO = { rocket: 3, confetti: 5, mine: 2, oil: 2 }
-export const ITEM_NAMES = { rocket: 'ロケット', confetti: '散弾', mine: '地雷', oil: 'オイル', repair: '修理' }
+export const WEAPON_IDS = ['paint', 'rocket', 'confetti', 'spring', 'cork']
+// 車（運転が1つ選ぶ）。dur は壊れにくさ（ダメージを割る）。mass は体当たりの重さ
+export const CAR_TYPES = [
+  { id: 'std', name: 'バランス', note: 'どれも平均点。迷ったらこれ', thrUp: 2.4, thrDown: 1.9, brake: 13, roll: 0.8, yawTau: 0.14, maxF: 21, acc: 8.0, dur: 1.0, mass: 1.0, steer: 1.0, grip: 4.2, boostK: 1.0, scale: 1.0, stat: [3, 3, 3, 3] },
+  { id: 'fast', name: 'ビュン', note: '速くて軽い。壊れやすい', thrUp: 3.4, thrDown: 2.5, brake: 12, roll: 0.65, yawTau: 0.11, maxF: 25.5, acc: 11.5, dur: 0.7, mass: 0.8, steer: 0.9, grip: 3.6, boostK: 1.0, scale: 0.95, stat: [5, 1, 3, 1] },
+  { id: 'heavy', name: 'ドスン', note: '遅いけど硬くて体当たりが強い', thrUp: 1.5, thrDown: 1.2, brake: 9, roll: 0.5, yawTau: 0.26, maxF: 17.5, acc: 5.6, dur: 1.55, mass: 1.8, steer: 0.8, grip: 3.3, boostK: 0.8, scale: 1.18, stat: [1, 5, 2, 5] },
+  { id: 'agile', name: 'ヒラリ', note: '小回りが利く。ブースト長め', thrUp: 2.7, thrDown: 2.1, brake: 13.5, roll: 0.85, yawTau: 0.08, maxF: 21, acc: 8.4, dur: 0.9, mass: 0.9, steer: 1.5, grip: 5.2, boostK: 1.5, scale: 0.97, stat: [3, 2, 5, 2] },
+]
+// アイテム。role D=運転だけが使う・G=射手だけが使う
+export const ITEMS = {
+  turbo: { role: 'D', name: 'ターボ', ammo: 1 }, spear: { role: 'D', name: '槍', ammo: 1 }, oil: { role: 'D', name: 'オイル', ammo: 2 }, mine: { role: 'D', name: '地雷', ammo: 2 }, repair: { role: 'D', name: '修理', instant: true },
+  grenade: { role: 'G', name: '手榴弾', ammo: 3 }, smoke: { role: 'G', name: '煙幕', ammo: 2 }, ricochet: { role: 'G', name: '跳弾', ammo: 1 }, turret: { role: 'G', name: 'タレット', ammo: 1 },
+}
+export const ITEM_NAMES = Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.name]))
+export const ITEM_AMMO = Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.ammo || 1]))
 
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 
 let UID = 1
-function newCar(S, x, z, yaw, team) {
+function newCar(S, x, z, yaw, team, type = 0) {
   const c = {
-    id: UID++, team, x, z, y: H(x, z), yaw, vx: 0, vz: 0, vy: 0, steer: 0, pitch: 0, roll: 0, air: false,
-    hp: 100, alive: true, wreckT: 0, boost: 1, boostLock: false, gunYaw: yaw, mag: WEAPONS.paint.mag, heat: 0, overT: 0, fireCd: 0, reloadT: 0,
+    id: UID++, team, type, x, z, y: H(x, z), yaw, vx: 0, vz: 0, vy: 0, steer: 0, pitch: 0, roll: 0, air: false,
+    hp: 100, alive: true, wreckT: 0, boost: 1, boostLock: false, gunYaw: yaw, turboT: 0, spearT: 0, thr: 0, brk: 0, hb: 0, yawRate: 0, ax: 0, slip: 0,
     lastHit: null, oilT: 0, invT: 0, spin: 0, speedKmh: 0, dmgFlash: 0, spot: -1, wreckV: [0, 0],
   }
   c.px = c.x; c.py = c.y; c.pz = c.z; c.pyaw = c.yaw; c.pgun = c.gunYaw; c.ppitch = 0; c.proll = 0
@@ -35,22 +51,32 @@ function newCar(S, x, z, yaw, team) {
 }
 function newPerson(t, idx) { return { team: t, idx, state: 'ride', x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, px: 0, py: 0, pz: 0, walkT: 0, invT: 0 } }
 
+export function randLoadout(rng) {
+  const ids = [...WEAPON_IDS]; const a = ids.splice((rng() * ids.length) | 0, 1)[0], b = ids[(rng() * ids.length) | 0]
+  return { car: (rng() * CAR_TYPES.length) | 0, weapons: [a, b] }
+}
+export function setLoadout(S, t, lo) {   // 準備のあいだに選び直せる（車は見た目も変わる）
+  t.loadout = lo
+  t.ws = lo.weapons.map(id => ({ id, mag: WEAPONS[id].mag, reloadT: 0, heat: 0, overT: 0 })); t.wSel = 0
+  const c = teamCar(S, t); if (c && S.phase !== 'play') c.type = lo.car
+}
 export function createState(seed = 1, opts = {}) {
   const S = {
-    seed, rng: mulberry(seed), t: 0, tMatch: 0, T: opts.matchSec || MATCH_SEC, cd: opts.noCountdown ? 0 : COUNTDOWN, over: false, overT: 0, phase: opts.noCountdown ? 'play' : 'count', winner: -1,
-    teams: [], cars: [], people: [], bullets: [], mines: [], oils: [], pickups: [], respawns: [], events: [], humanTeam: opts.humanTeam ?? 0, ranking: [], outCount: 0, wrecks: 0,
+    seed, rng: mulberry(seed), t: 0, tMatch: 0, T: opts.matchSec || MATCH_SEC, cd: opts.noCountdown ? 0 : (opts.prepSec ?? COUNTDOWN), over: false, overT: 0, phase: opts.noCountdown ? 'play' : 'prep', winner: -1,
+    teams: [], cars: [], people: [], bullets: [], mines: [], oils: [], smokes: [], turrets: [], pickups: [], respawns: [], events: [], humanTeam: opts.humanTeam ?? 0, ranking: [], outCount: 0, wrecks: 0,
   }
   for (let i = 0; i < 5; i++) {
-    const sp = TEAM_SPAWNS[i], car = newCar(S, sp.x, sp.z, sp.yaw, i); car.invT = 1
-    const tm = { id: i, name: TEAM_NAMES[i], color: TEAM_COLORS[i], stock: STOCK, kills: 0, out: false, outT: 0, car: car.id, driver: 0, item: null, swapReq: false, swapT: 0, footHp: 0, footLast: null, walking: false, stats: { shots: 0, hits: 0, rams: 0, pick: 0 }, p: [newPerson(i, 0), newPerson(i, 1)] }
-    S.teams.push(tm); S.people.push(tm.p[0], tm.p[1])
+    const lo = randLoadout(S.rng)
+    const sp = TEAM_SPAWNS[i], car = newCar(S, sp.x, sp.z, sp.yaw, i, lo.car); car.invT = 1
+    const tm = { id: i, name: TEAM_NAMES[i], color: TEAM_COLORS[i], stock: STOCK, kills: 0, out: false, outT: 0, car: car.id, driver: 0, iD: null, iG: null, ricT: 0, cd: 0, wSel: 0, ws: [], loadout: lo, swapReq: false, swapT: 0, footHp: 0, footLast: null, walking: false, stats: { shots: 0, hits: 0, rams: 0, pick: 0 }, p: [newPerson(i, 0), newPerson(i, 1)] }
+    S.teams.push(tm); S.people.push(tm.p[0], tm.p[1]); setLoadout(S, tm, lo)
   }
-  SPARE_SPOTS.forEach((sp, i) => { const c = newCar(S, sp.x, sp.z, sp.yaw, -1); c.spot = i; c.hp = 100 })
+  SPARE_SPOTS.forEach((sp, i) => { const c = newCar(S, sp.x, sp.z, sp.yaw, -1, (S.rng() * CAR_TYPES.length) | 0); c.spot = i; c.hp = 100 })
   PICKUP_SPOTS.forEach((sp, i) => S.pickups.push({ x: sp.x, z: sp.z, type: pickType(S), t: 0, id: i }))
   return S
 }
-const PICK_W = [['rocket', 3], ['confetti', 3], ['mine', 2], ['oil', 2], ['repair', 3]]
-function pickType(S) { let r = S.rng() * 13, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return 'repair' }
+const PICK_W = [['turbo', 2], ['spear', 2], ['oil', 2], ['mine', 2], ['repair', 3], ['grenade', 3], ['smoke', 2], ['ricochet', 2], ['turret', 2]]
+function pickType(S) { let r = S.rng() * 20, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return 'repair' }
 export const carById = (S, id) => S.cars.find(c => c.id === id)
 export const teamCar = (S, t) => t.car >= 0 ? carById(S, t.car) : null
 export const ev = (S, o) => S.events.push(o)
@@ -65,6 +91,7 @@ export function step(S, inputs, dt = DT) {
   for (const c of S.cars) { c.px = c.x; c.py = c.y; c.pz = c.z; c.pyaw = c.yaw; c.pgun = c.gunYaw; c.ppitch = c.pitch; c.proll = c.roll }
   for (const p of S.people) { p.px = p.x; p.py = p.y; p.pz = p.z }
   if (S.cd > 0) { S.cd -= dt; if (S.cd <= 0) { S.phase = 'play'; ev(S, { k: 'go' }) } else { const n = Math.ceil(S.cd); if (n !== S.lastCd) { S.lastCd = n; ev(S, { k: 'count', n }) } } }
+  if (S.phase === 'prep' && S.cd <= 0) S.phase = 'play'
   const live = S.phase === 'play' && !S.over
   if (live) S.tMatch += dt
   const blank = {}
@@ -106,65 +133,77 @@ function teamControl(S, t, inp, dt, live) {
   const c = teamCar(S, t)
   if (!c || !c.alive) return
   t.inp = inp
-  // 役交代: 止まって3秒
   if (inp.swap) { t.swapReq = !t.swapReq; if (!t.swapReq) t.swapT = 0 }
-  if (t.swapReq && Math.hypot(c.vx, c.vz) > 3 ) { t.swapReq = false; t.swapT = 0 }
+  if (t.swapReq && Math.hypot(c.vx, c.vz) > 3) { t.swapReq = false; t.swapT = 0 }
   if (t.swapReq) {
     if (Math.hypot(c.vx, c.vz) < 1.6 && !c.air) { t.swapT += dt; if (t.swapT >= 3) { t.driver = 1 - t.driver; t.swapReq = false; t.swapT = 0; ev(S, { k: 'swap', team: t.id }) } }
     else t.swapT = Math.max(0, t.swapT - dt * 2)
   }
   if (!live) return
-  // 射撃
   c.gunYaw = inp.aim ?? c.gunYaw
-  c.fireCd -= dt; c.invT -= dt
-  if (c.overT > 0) { c.overT -= dt; if (c.overT <= 0) c.heat = 0.5 }
-  else c.heat = Math.max(0, c.heat - 0.28 * dt)
-  if (c.reloadT > 0) { c.reloadT -= dt; if (c.reloadT <= 0) { c.mag = WEAPONS.paint.mag; ev(S, { k: 'reloaded', team: t.id, x: c.x, y: c.y, z: c.z }) } }
-  else if ((inp.reload && c.mag < WEAPONS.paint.mag) || (c.mag <= 0 && !specialWeapon(t))) { c.reloadT = WEAPONS.paint.reload; ev(S, { k: 'reload', team: t.id, x: c.x, y: c.y, z: c.z }) }
-  if (inp.fire && c.fireCd <= 0) fire(S, t, c, inp)
-  // アイテム（地雷・オイル）
-  if (inp.use && t.item && (t.item.type === 'mine' || t.item.type === 'oil')) {
-    const [fx, fz] = fwd(c), px = c.x - fx * 3.2, pz = c.z - fz * 3.2
-    if (t.item.type === 'mine') { S.mines.push({ x: px, z: pz, y: H(px, pz), team: t.id, arm: 1.1, life: 45, id: UID++ }); ev(S, { k: 'dropMine', team: t.id, x: px, y: H(px, pz), z: pz }) }
-    else { S.oils.push({ x: px, z: pz, y: H(px, pz), team: t.id, life: 14, r: 4, id: UID++ }); ev(S, { k: 'dropOil', team: t.id, x: px, y: H(px, pz), z: pz }) }
-    if (--t.item.ammo <= 0) t.item = null
+  t.cd -= dt; c.invT -= dt; c.turboT = Math.max(0, c.turboT - dt); c.spearT = Math.max(0, c.spearT - dt); t.ricT = Math.max(0, t.ricT - dt)
+  // 銃の持ち替え
+  if (inp.wswap) { t.wSel ^= 1; ev(S, { k: 'wswap', team: t.id, w: t.ws[t.wSel].id, x: c.x, y: c.y, z: c.z }) }
+  else if (inp.wsel != null && inp.wsel !== t.wSel) { t.wSel = inp.wsel; ev(S, { k: 'wswap', team: t.id, w: t.ws[t.wSel].id, x: c.x, y: c.y, z: c.z }) }
+  for (const w of t.ws) {
+    if (w.overT > 0) { w.overT -= dt; if (w.overT <= 0) w.heat = 0.5 } else w.heat = Math.max(0, w.heat - 0.28 * dt)
+    if (w.reloadT > 0) { w.reloadT -= dt; if (w.reloadT <= 0) { w.mag = WEAPONS[w.id].mag; ev(S, { k: 'reloaded', team: t.id, x: c.x, y: c.y, z: c.z }) } }
   }
+  const w = t.ws[t.wSel], W = WEAPONS[w.id]
+  if (w.reloadT <= 0 && ((inp.reload && w.mag < W.mag) || w.mag <= 0)) { w.reloadT = W.reload; ev(S, { k: 'reload', team: t.id, x: c.x, y: c.y, z: c.z }) }
+  if (inp.fire && t.cd <= 0 && w.reloadT <= 0 && w.mag > 0 && w.overT <= 0) fire(S, t, c, inp, w, W)
+  // 役ごとのアイテム
+  if (inp.useD && t.iD) useDriverItem(S, t, c)
+  if (inp.useG && t.iG) useGunnerItem(S, t, c)
 }
-export function specialWeapon(t) { return t.item && (t.item.type === 'rocket' || t.item.type === 'confetti') ? t.item : null }
+function useDriverItem(S, t, c) {
+  const it = t.iD, [fx, fz] = fwd(c)
+  if (it.type === 'turbo') { c.turboT = 6; c.boost = 1; c.boostLock = false; ev(S, { k: 'turbo', team: t.id, x: c.x, y: c.y, z: c.z }) }
+  else if (it.type === 'spear') { c.spearT = 9; ev(S, { k: 'spear', team: t.id, x: c.x, y: c.y, z: c.z }) }
+  else if (it.type === 'mine') { const px = c.x - fx * 3.2, pz = c.z - fz * 3.2; S.mines.push({ x: px, z: pz, y: H(px, pz), team: t.id, arm: 1.1, life: 45, id: UID++ }); ev(S, { k: 'dropMine', team: t.id, x: px, y: H(px, pz), z: pz }) }
+  else if (it.type === 'oil') { const px = c.x - fx * 3.2, pz = c.z - fz * 3.2; S.oils.push({ x: px, z: pz, y: H(px, pz), team: t.id, life: 14, r: 4, id: UID++ }); ev(S, { k: 'dropOil', team: t.id, x: px, y: H(px, pz), z: pz }) }
+  if (--it.ammo <= 0) t.iD = null
+}
+function useGunnerItem(S, t, c) {
+  const it = t.iG, dx = Math.sin(c.gunYaw), dz = Math.cos(c.gunYaw)
+  if (it.type === 'grenade') { S.bullets.push({ type: 'grenade', team: t.id, x: c.x + dx * 1.4, y: c.y + 2.4, z: c.z + dz * 1.4, px: c.x, py: c.y + 2.4, pz: c.z, vx: dx * 20 + c.vx * 0.6, vz: dz * 20 + c.vz * 0.6, vy: 9, life: 2.1, id: UID++ }); ev(S, { k: 'throw', team: t.id, x: c.x, y: c.y + 2.4, z: c.z }) }
+  else if (it.type === 'smoke') { const px = c.x + dx * 9, pz = c.z + dz * 9; S.smokes.push({ x: px, z: pz, y: H(px, pz), r: 7.5, life: 10, team: t.id, id: UID++ }); ev(S, { k: 'smoke', team: t.id, x: px, y: H(px, pz), z: pz }) }
+  else if (it.type === 'ricochet') { t.ricT = 14; ev(S, { k: 'ricochet', team: t.id, x: c.x, y: c.y, z: c.z }) }
+  else if (it.type === 'turret') { const px = c.x + dx * 4, pz = c.z + dz * 4; if (!solidAtPoint(px, c.y + 1, pz)) S.turrets.push({ team: t.id, x: px, z: pz, y: H(px, pz), yaw: c.gunYaw, hp: 40, life: 18, cd: 0.5, id: UID++ }); ev(S, { k: 'turret', team: t.id, x: px, y: H(px, pz), z: pz }) }
+  if (--it.ammo <= 0) t.iG = null
+}
+export function curWeapon(t) { return t.ws[t.wSel] }
 
-function fire(S, t, c, inp) {
-  const sp = specialWeapon(t)
+function fire(S, t, c, inp, w, W) {
   const yaw = c.gunYaw, dirx = Math.sin(yaw), dirz = Math.cos(yaw)
   const mx = c.x + dirx * 0.9, mz = c.z + dirz * 0.9, my = c.y + 2.15
-  const assist = inp.assist || null   // { pitch } 人が撃つ時の見上げ見下ろし
-  const pitch = assist && assist.pitch ? assist.pitch : 0
+  const pitch = inp.assist && inp.assist.pitch ? inp.assist.pitch : 0
   const cp = Math.cos(pitch), sp_ = Math.sin(pitch)
-  if (sp && sp.type === 'rocket') {
-    c.fireCd = 0.6; S.bullets.push({ type: 'rocket', team: t.id, x: mx, y: my, z: mz, px: mx, py: my, pz: mz, vx: dirx * 12 * cp, vz: dirz * 12 * cp, vy: 12 * sp_, speed: 12, yaw, life: WEAPONS.rocket.life, id: UID++, tgt: -1 })
+  t.cd = W.cd; w.mag--; t.stats.shots++
+  const base = { team: t.id, x: mx, y: my, z: mz, px: mx, py: my, pz: mz, id: UID++ }
+  const ric = t.ricT > 0 ? 2 : 0
+  if (W.kind === 'rocket') {
+    S.bullets.push({ ...base, type: 'rocket', vx: dirx * 12 * cp, vz: dirz * 12 * cp, vy: 12 * sp_, speed: 12, yaw, life: W.life })
     ev(S, { k: 'shot', w: 'rocket', team: t.id, x: mx, y: my, z: mz })
-    if (--sp.ammo <= 0) t.item = null
-    t.stats.shots++; return
-  }
-  if (sp && sp.type === 'confetti') {
-    c.fireCd = 0.55
-    const W = WEAPONS.confetti
+  } else if (W.kind === 'confetti') {
     for (let i = 0; i < W.n; i++) {
       const a = yaw + (S.rng() - 0.5) * W.spread * 2, v = W.speed * (0.8 + S.rng() * 0.35), pp = pitch + (S.rng() - 0.5) * 0.1
-      S.bullets.push({ type: 'confetti', team: t.id, x: mx, y: my, z: mz, px: mx, py: my, pz: mz, vx: Math.sin(a) * v * Math.cos(pp), vz: Math.cos(a) * v * Math.cos(pp), vy: Math.sin(pp) * v, life: W.life, id: UID++, hue: i })
+      S.bullets.push({ ...base, id: UID++, type: 'confetti', vx: Math.sin(a) * v * Math.cos(pp), vz: Math.cos(a) * v * Math.cos(pp), vy: Math.sin(pp) * v, life: W.life, hue: i })
     }
     ev(S, { k: 'shot', w: 'confetti', team: t.id, x: mx, y: my, z: mz })
-    if (--sp.ammo <= 0) t.item = null
-    t.stats.shots++; return
+  } else if (W.kind === 'spring') {
+    S.bullets.push({ ...base, type: 'spring', vx: dirx * W.speed * cp + c.vx * 0.3, vz: dirz * W.speed * cp + c.vz * 0.3, vy: W.speed * sp_ + 4, life: W.life, bounces: W.bounces })
+    ev(S, { k: 'shot', w: 'spring', team: t.id, x: mx, y: my, z: mz })
+  } else if (W.kind === 'cork') {
+    S.bullets.push({ ...base, type: 'cork', vx: dirx * W.speed * cp, vz: dirz * W.speed * cp, vy: W.speed * sp_, life: W.life, bounces: ric })
+    ev(S, { k: 'shot', w: 'cork', team: t.id, x: mx, y: my, z: mz })
+  } else {
+    w.heat += 0.09; if (w.heat >= 1) { w.heat = 1; w.overT = 1.7; ev(S, { k: 'overheat', team: t.id, x: c.x, y: c.y, z: c.z }) }
+    t.cd = W.cd * (w.heat > 0.7 ? 1.25 : 1)
+    const sd = 0.012 + w.heat * 0.03, a = yaw + (S.rng() - 0.5) * 2 * sd, pp = pitch + (S.rng() - 0.5) * sd
+    S.bullets.push({ ...base, type: 'paint', vx: Math.sin(a) * W.speed * Math.cos(pp), vz: Math.cos(a) * W.speed * Math.cos(pp), vy: Math.sin(pp) * W.speed, life: W.life, bounces: ric })
+    ev(S, { k: 'shot', w: 'paint', team: t.id, x: mx, y: my, z: mz })
   }
-  // ペイント弾
-  if (c.reloadT > 0 || c.mag <= 0 || c.overT > 0) return
-  const W = WEAPONS.paint
-  c.fireCd = W.cd * (c.heat > 0.7 ? 1.25 : 1); c.mag--
-  c.heat += 0.09; if (c.heat >= 1) { c.heat = 1; c.overT = 1.7; ev(S, { k: 'overheat', team: t.id, x: c.x, y: c.y, z: c.z }) }
-  const sd = 0.012 + c.heat * 0.03, a = yaw + (S.rng() - 0.5) * 2 * sd, pp = pitch + (S.rng() - 0.5) * sd
-  S.bullets.push({ type: 'paint', team: t.id, x: mx, y: my, z: mz, px: mx, py: my, pz: mz, vx: Math.sin(a) * W.speed * Math.cos(pp), vz: Math.cos(a) * W.speed * Math.cos(pp), vy: Math.sin(pp) * W.speed, life: W.life, id: UID++ })
-  t.stats.shots++
-  ev(S, { k: 'shot', w: 'paint', team: t.id, x: mx, y: my, z: mz })
 }
 
 // ---------------------------------------------------------------- 車の動き
@@ -178,44 +217,70 @@ function updateCar(S, c, dt) {
   c.dmgFlash = Math.max(0, c.dmgFlash - dt)
   c.oilT = Math.max(0, c.oilT - dt)
   // ブースト残量
-  const boosting = !!(inp && inp.boost && c.boost > 0 && !c.boostLock && !c.air && (inp.throttle || 0) > 0)
-  if (boosting) { c.boost -= dt / 1.7; if (c.boost <= 0) { c.boost = 0; c.boostLock = true } } else { c.boost = Math.min(1, c.boost + dt / 6); if (c.boostLock && c.boost > 0.3) c.boostLock = false }
+  const T = CAR_TYPES[c.type] || CAR_TYPES[0]
+  const turbo = c.turboT > 0
+  const boosting = !!(inp && (inp.boost || turbo) && (c.boost > 0 || turbo) && (!c.boostLock || turbo) && !c.air && (inp.throttle || 0) > 0)
+  if (boosting && !turbo) { c.boost -= dt / (1.7 * T.boostK); if (c.boost <= 0) { c.boost = 0; c.boostLock = true } } else if (!boosting) { c.boost = Math.min(1, c.boost + dt / 6); if (c.boostLock && c.boost > 0.3) c.boostLock = false }
   c.boosting = boosting
   // 煙・火の段階（画面の演出用）
   stepBody(S, c, dt, inp, boosting)
 }
 
 function stepBody(S, c, dt, inp, boosting) {
+  const T = CAR_TYPES[c.type] || CAR_TYPES[0]
   const hulk = !c.alive
   const spare = c.team < 0 && c.alive
   // 向きと速度
   const gE = 0.6
   if (!c.air) {
     let [fx, fz] = fwd(c)
-    // ハンドル
+    let sp = c.vx * fx + c.vz * fz
+    const vmax = boosting ? T.maxF * 1.48 : T.maxF
+    const thrIn = inp ? clamp(inp.throttle || 0, -1, 1) : 0
+    c.hb += ((inp && inp.hb && Math.abs(sp) > 4 ? 1 : 0) - c.hb) * Math.min(1, 9 * dt)
+    // ハンドル: ゆっくり切れて、ゆっくり戻る。重い車ほど鈍い
     const want = inp ? clamp(inp.steer || 0, -1, 1) : 0
-    const rate = Math.abs(want) > Math.abs(c.steer) || Math.sign(want) !== Math.sign(c.steer) && want !== 0 ? 2.4 : 1.8
+    const rate = (Math.abs(want) > Math.abs(c.steer) || Math.sign(want) !== Math.sign(c.steer) && want !== 0 ? 2.4 : 1.8) * (1.15 - 0.2 * T.mass)
     const d = want - c.steer
     c.steer += Math.sign(d) * Math.min(Math.abs(d), rate * dt)
-    let sp = c.vx * fx + c.vz * fz
-    const vmax = boosting ? BOOST_MAXF : MAXF
-    // 先に向きを変える（速度はそのまま。向きが変わった分が横滑りになる）
-    const maxSteer = 0.62 - 0.4 * clamp(Math.abs(sp) / 30, 0, 1)
-    const yawRate = sp * Math.tan(c.steer * maxSteer) / 2.7
-    c.yaw -= yawRate * dt
+    // 曲がり: 切った角から目標の向きの回り方が決まり、車体の向きはそれに遅れてついてくる
+    const spN = clamp(Math.abs(sp) / Math.max(10, vmax), 0, 1.3)
+    const maxSteer = (0.62 - 0.4 * clamp(Math.abs(sp) / 30, 0, 1)) * T.steer
+    const under = 1 - 0.42 * clamp(spN * spN * Math.abs(c.steer) * 1.4, 0, 1)         // 速い時に強く切ると前輪が負けて外へふくらむ
+    const hard = Math.abs(c.steer) > 0.62 && Math.abs(sp) > 0.55 * vmax && thrIn > 0.3  // 速い時の大きな舵は後ろが流れる
+    let yawT = sp * Math.tan(c.steer * maxSteer) / 2.7 * under * (hard ? 1.16 : 1) * (1 + 0.55 * c.hb)
+    c.yawRate += (yawT - c.yawRate) * (1 - Math.exp(-dt / T.yawTau))
+    c.yaw -= c.yawRate * dt
     ;[fx, fz] = fwd(c)
     const rx = -Math.cos(c.yaw), rz = Math.sin(c.yaw)
     sp = c.vx * fx + c.vz * fz
     let lat = c.vx * rx + c.vz * rz
-    const thr = inp ? (inp.throttle || 0) : 0
+    // 踏み込みと離しにも慣性
+    const k = thrIn > c.thr ? T.thrUp : T.thrDown
+    c.thr += clamp(thrIn - c.thr, -k * dt, k * dt)
+    const brkIn = thrIn < -0.02 ? 1 : 0
+    c.brk += clamp(brkIn - c.brk, -8 * dt, 6 * dt)
+    let ax = 0
     if (!hulk) {
-      if (thr > 0.02) { if (sp < -0.5) sp += 30 * dt; else { const a = 15 * (1 - Math.pow(Math.max(0, sp) / vmax, 2) * 0.85) + (boosting ? 16 : 0); sp = Math.min(sp + a * thr * dt, Math.max(sp, vmax)) } }
-      else if (thr < -0.02) { if (sp > 0.6) sp -= 30 * dt; else sp = Math.max(sp - 10 * dt, -MAXR) }
-      else sp -= Math.sign(sp) * Math.min(Math.abs(sp), (inp ? 3.4 : 9) * dt)
+      if (c.thr > 0.02 && thrIn > -0.02) {
+        if (sp < -0.5) ax = 26
+        else ax = T.acc * c.thr * (1 - Math.pow(Math.max(0, sp) / vmax, 3.4) * 0.92) + (boosting ? 14 : 0)
+      } else if (c.brk > 0.05) {
+        if (sp > 0.6) ax = -T.brake * c.brk; else ax = -10 * c.brk * (sp > -MAXR ? 1 : 0)
+      } else {
+        const drag = (inp ? T.roll : 6) + 0.0028 * sp * sp   // 離すと転がる。重い車ほど長く転がる
+        ax = -Math.sign(sp) * Math.min(Math.abs(sp) / Math.max(dt, 1e-3), drag)
+      }
+      sp = Math.min(sp + ax * dt, Math.max(sp, vmax))
     } else sp -= Math.sign(sp) * Math.min(Math.abs(sp), 14 * dt)
-    const grip = c.oilT > 0 ? 0.5 : 7.5
+    c.ax = ax
+    // 横の滑り: 一気には止まらず、グリップが戻るまで流れる
+    let grip = c.oilT > 0 ? 0.5 : T.grip
+    grip *= (1 - 0.42 * clamp(Math.abs(c.steer) * Math.abs(sp) / 20, 0, 1) * (hard ? 1.35 : 1)) * (1 - 0.86 * c.hb)
+    if (c.hb > 0.3) sp -= Math.sign(sp) * 2.2 * c.hb * dt
     lat *= Math.exp(-grip * dt)
     if (c.oilT > 0 && inp) c.yaw += (Math.sin(S.t * 7 + c.id) * 0.9) * dt * (Math.abs(sp) / 12)
+    c.slip = Math.abs(lat)
     c.vx = fx * sp + rx * lat; c.vz = fz * sp + rz * lat
     // 坂道の重さ
     const e = 0.5, gx = (H(c.x + e, c.z) - H(c.x - e, c.z)) / (2 * e), gz = (H(c.x, c.z + e) - H(c.x, c.z - e)) / (2 * e)
@@ -231,15 +296,15 @@ function stepBody(S, c, dt, inp, boosting) {
     const okx = H(nx, c.z) - c.y <= hh, okz = H(c.x, nz) - c.y <= hh
     const sp = Math.hypot(c.vx, c.vz)
     if (okx && !okz) { nz = c.z; c.vz *= -0.2 } else if (okz && !okx) { nx = c.x; c.vx *= -0.2 } else { nx = c.x; nz = c.z; c.vx *= -0.2; c.vz *= -0.2 }
-    if (sp > 8 && c.alive) hurt(S, c, (sp - 7) * 1.3, null, c.x, c.z, 'cliff')
+    if (sp > 8 && c.alive) hurt(S, c, (sp - 7) * 1.3 * 0.6, null, c.x, c.z, 'cliff')
   }
   c.x = nx; c.z = nz
   // 壁
-  const lim = HALF - 3
+  const lim = WORLD - 3
   let hit = 0
-  if (c.x > lim) { c.x = lim; if (c.vx > 0) { hit = c.vx; c.vx *= -0.3 } } else if (c.x < -lim) { c.x = -lim; if (c.vx < 0) { hit = -c.vx; c.vx *= -0.3 } }
-  if (c.z > lim) { c.z = lim; if (c.vz > 0) { hit = Math.max(hit, c.vz); c.vz *= -0.3 } } else if (c.z < -lim) { c.z = -lim; if (c.vz < 0) { hit = Math.max(hit, -c.vz); c.vz *= -0.3 } }
-  if (hit > 5) { if (c.alive) hurt(S, c, Math.max(0, (hit - 6)) * 1.2, null, c.x, c.z, 'wall'); ev(S, { k: 'wall', x: c.x, y: c.y + 1, z: c.z, power: hit }) }
+  if (c.x > lim) { c.x = lim; if (c.vx > 0) { hit = c.vx; c.vx *= -0.5 } } else if (c.x < -lim) { c.x = -lim; if (c.vx < 0) { hit = -c.vx; c.vx *= -0.5 } }
+  if (c.z > lim) { c.z = lim; if (c.vz > 0) { hit = Math.max(hit, c.vz); c.vz *= -0.5 } } else if (c.z < -lim) { c.z = -lim; if (c.vz < 0) { hit = Math.max(hit, -c.vz); c.vz *= -0.5 } }
+  if (hit > 5) { if (c.alive) hurt(S, c, Math.max(0, (hit - 6)) * 1.2 * 0.6, null, c.x, c.z, 'wall'); ev(S, { k: 'wall', x: c.x, y: c.y + 1, z: c.z, power: hit }) }
   // 上下
   const nh = H(c.x, c.z)
   if (!c.air) {
@@ -276,8 +341,8 @@ function stepBody(S, c, dt, inp, boosting) {
     for (const o of out) { c.x += o[0] * o[2] * 0.9; c.z += o[1] * o[2] * 0.9 }
     const vn = c.vx * best[0] + c.vz * best[1]
     if (vn < 0) {
-      c.vx -= 1.3 * vn * best[0]; c.vz -= 1.3 * vn * best[1]
-      if (-vn > 4) { if (c.alive) hurt(S, c, Math.max(0, -vn - 6) * 1.4, null, cx, cz, 'obst'); ev(S, { k: 'wall', x: cx, y: c.y + 1, z: cz, power: -vn }) }
+      c.vx -= 1.5 * vn * best[0]; c.vz -= 1.5 * vn * best[1]; c.yawRate += (S.rng() - 0.5) * Math.min(2, -vn * 0.08)
+      if (-vn > 4) { if (c.alive) hurt(S, c, Math.max(0, -vn - 6) * 1.4 * 0.6, null, cx, cz, 'obst'); ev(S, { k: 'wall', x: cx, y: c.y + 1, z: cz, power: -vn }) }
     }
   }
   c.speedKmh = Math.hypot(c.vx, c.vz) * 3.6
@@ -286,10 +351,10 @@ function stepBody(S, c, dt, inp, boosting) {
 }
 
 // ダメージ（車）。by は相手のチーム番号（null なら自爆）
-const HOW_K = { bullet: 0.38, ram: 0.5, rocket: 0.75, mine: 0.75 }
+const HOW_K = { bullet: 0.46, ram: 0.56, rocket: 0.9, mine: 0.9 }
 export function hurt(S, c, dmg, by, x, z, how) {
   if (!c.alive || dmg <= 0 || c.invT > 0 || S.phase !== 'play' || S.over) return 0
-  dmg *= HOW_K[how] ?? 0.8
+  dmg *= (HOW_K[how] ?? 0.6) / (CAR_TYPES[c.type] || CAR_TYPES[0]).dur
   c.hp -= dmg; c.dmgFlash = 0.25
   if (by !== null && by !== undefined && by !== c.team) c.lastHit = { team: by, t: S.t }
   return dmg
@@ -312,7 +377,8 @@ function collideCars(S, dt) {
         if (p > pen && d > 1e-4) { pen = p; nx = dx / d; nz = dz / d; ax = (px + qx) / 2; az = (pz + qz) / 2 }
       }
       if (pen <= 0) continue
-      const iA = A.alive ? 1 : 0, iB = B.alive ? 1 : 0, sum = iA + iB
+      const mA = (CAR_TYPES[A.type] || CAR_TYPES[0]).mass, mB = (CAR_TYPES[B.type] || CAR_TYPES[0]).mass
+      const iA = A.alive ? 1 / mA : 0, iB = B.alive ? 1 / mB : 0, sum = iA + iB
       A.x += nx * pen * iA / sum; A.z += nz * pen * iA / sum; B.x -= nx * pen * iB / sum; B.z -= nz * pen * iB / sum
       const vn = (A.vx - B.vx) * nx + (A.vz - B.vz) * nz
       if (vn < 0) {
@@ -329,8 +395,9 @@ function collideCars(S, dt) {
           const frontA = -nx * afx + -nz * afz, frontB = nx * bfx + nz * bfz
           const mult = f => f > 0.55 ? 0.7 : f < -0.35 ? 1.5 : 1.1
           const tA = A.team, tB = B.team
-          if (A.alive) { hurt(S, A, base * mult(frontA), tB >= 0 ? tB : null, ax, az, 'ram') }
-          if (B.alive) { hurt(S, B, base * mult(frontB), tA >= 0 ? tA : null, ax, az, 'ram') }
+          const spA = A.spearT > 0 && frontA > 0.55 ? 2.4 : 1, spB = B.spearT > 0 && frontB > 0.55 ? 2.4 : 1
+          if (A.alive) { hurt(S, A, base * mult(frontA) * Math.sqrt(mB / mA) * spB, tB >= 0 ? tB : null, ax, az, 'ram') }
+          if (B.alive) { hurt(S, B, base * mult(frontB) * Math.sqrt(mA / mB) * spA, tA >= 0 ? tA : null, ax, az, 'ram') }
           if (tB >= 0 && A.alive) S.teams[tB].stats.rams++
           if (tA >= 0 && B.alive) S.teams[tA].stats.rams++
           ev(S, { k: 'ram', x: ax, y: Math.max(A.y, B.y) + 0.9, z: az, power: closing, a: A.id, b: B.id })
@@ -354,9 +421,16 @@ function updateBullets(S, dt) {
     const b = B[i]
     b.px = b.x; b.py = b.y; b.pz = b.z
     b.life -= dt
+    if (b.type === 'grenade') {   // 弧を描いて転がり、時間で爆発
+      b.vy -= G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt
+      const h = H(b.x, b.z)
+      if (b.y < h + 0.15) { b.y = h + 0.15; if (b.vy < -2) { b.vy = -b.vy * 0.45; ev(S, { k: 'bounce', x: b.x, y: b.y, z: b.z }) } else b.vy = 0; b.vx *= 0.82; b.vz *= 0.82 }
+      if (solidAtPoint(b.x, b.y, b.z) || Math.abs(b.x) > WORLD || Math.abs(b.z) > WORLD) { b.x = b.px; b.z = b.pz; b.vx *= -0.5; b.vz *= -0.5 }
+      if (b.life <= 0) { explode(S, b.x, b.y, b.z, b.team, 6.5, 40, 'rocket'); B.splice(i, 1) }
+      continue
+    }
     if (b.type === 'rocket') {
       b.speed = Math.min(WEAPONS.rocket.speed, b.speed + 40 * dt)
-      // ゆるく追う
       let best = null, bd = 1e9
       for (const c of S.cars) {
         if (!c.alive || c.team === b.team || c.team < 0) continue
@@ -367,14 +441,26 @@ function updateBullets(S, dt) {
       if (best) { const want = Math.atan2(best.x - b.x, best.z - b.z), dv = angDiff(want, b.yaw); b.yaw += clamp(dv, -1.7 * dt, 1.7 * dt); const dy = (best.y + 1 - b.y) / Math.max(5, Math.hypot(best.x - b.x, best.z - b.z)); b.vy += (dy * b.speed - b.vy) * Math.min(1, 3 * dt) } else b.vy *= 1 - 0.8 * dt
       b.vx = Math.sin(b.yaw) * b.speed; b.vz = Math.cos(b.yaw) * b.speed
     } else if (b.type === 'confetti') { b.vy -= 6 * dt; b.vx *= 1 - 1.2 * dt; b.vz *= 1 - 1.2 * dt }
+    else if (b.type === 'spring') b.vy -= 14 * dt
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt
     let hitK = null, hitObj = null
-    // 壁・地面・障害物
-    if (Math.abs(b.x) > HALF || Math.abs(b.z) > HALF) { hitK = 'wall'; b.x = clamp(b.x, -HALF, HALF); b.z = clamp(b.z, -HALF, HALF) }
+    { const L = Math.hypot(b.x - b.px, b.z - b.pz, b.y - b.py), n = Math.ceil(L / 0.7); for (let k = 1; k < n && !hitK; k++) { const f = k / n, qx = b.px + (b.x - b.px) * f, qy = b.py + (b.y - b.py) * f, qz = b.pz + (b.z - b.pz) * f; if (solidAtPoint(qx, qy, qz) || qy < H(qx, qz)) { b.x = qx; b.y = qy; b.z = qz; break } } }
+    if (Math.abs(b.x) > WORLD || Math.abs(b.z) > WORLD) { hitK = 'wall'; b.x = clamp(b.x, -WORLD, WORLD); b.z = clamp(b.z, -WORLD, WORLD) }
     else if (b.y < H(b.x, b.z)) { hitK = 'ground'; b.y = H(b.x, b.z) + 0.05 }
     else if (solidAtPoint(b.x, b.y, b.z)) hitK = 'obst'
-    else if (b.y > 25) hitK = 'sky'
-    // 車
+    else if (b.y > 30) hitK = 'sky'
+    // 反射（バネの鉄球・跳弾）
+    if (hitK && hitK !== 'sky' && (b.bounces || 0) > 0 && b.type !== 'rocket' && b.type !== 'confetti') {
+      b.bounces--
+      if (hitK === 'ground') { b.vy = Math.abs(b.vy) * (b.type === 'spring' ? 0.9 : 0.8) + (b.type === 'spring' ? 3 : 0) }
+      else {
+        b.x = b.px; b.y = b.py; b.z = b.pz
+        if (Math.abs(b.px + b.vx * dt) > WORLD || solidAtPoint(b.px + b.vx * dt, b.py, b.pz)) b.vx = -b.vx; else b.vz = -b.vz
+        if (Math.abs(b.pz + b.vz * dt) > WORLD) b.vz = -b.vz
+      }
+      ev(S, { k: 'bounce', x: b.x, y: b.y, z: b.z })
+      continue
+    }
     if (!hitK) for (const c of S.cars) {
       if (c.team === b.team && c.team >= 0) continue
       if (b.y < c.y - 0.3 || b.y > c.y + 2.5) continue
@@ -387,16 +473,20 @@ function updateBullets(S, dt) {
       if (b.y < p.y - 0.2 || b.y > p.y + 2.1) continue
       if (segCircle(b.px, b.pz, b.x, b.z, p.x, p.z, 0.7) >= 0) { hitK = 'person'; hitObj = p; break }
     }
+    if (!hitK) for (const tu of S.turrets) {
+      if (tu.team === b.team || b.y < tu.y || b.y > tu.y + 1.8) continue
+      if (segCircle(b.px, b.pz, b.x, b.z, tu.x, tu.z, 0.9) >= 0) { hitK = 'turret'; hitObj = tu; break }
+    }
     if (hitK) {
       if (b.type === 'rocket') explode(S, b.x, b.y, b.z, b.team, WEAPONS.rocket.r, WEAPONS.rocket.dmg, 'rocket')
       else {
-        const dmg = (b.type === 'paint' ? WEAPONS.paint.dmg : WEAPONS.confetti.dmg)
+        const dmg = b.type === 'paint' ? WEAPONS.paint.dmg : b.type === 'confetti' ? WEAPONS.confetti.dmg : b.type === 'spring' ? WEAPONS.spring.dmg : b.type === 'cork' ? WEAPONS.cork.dmg : b.dmg || 2.6
         if (hitK === 'car') {
           const c = hitObj; if (c.alive) { const d = hurt(S, c, dmg, b.team, b.x, b.z, 'bullet'); if (d && b.team >= 0) S.teams[b.team].stats.hits++ }
-          const m = Math.hypot(b.vx, b.vz) || 1; c.vx += b.vx / m * 0.12; c.vz += b.vz / m * 0.12
+          const m = Math.hypot(b.vx, b.vz) || 1; c.vx += b.vx / m * (b.type === 'cork' || b.type === 'spring' ? 0.9 : 0.12); c.vz += b.vz / m * (b.type === 'cork' || b.type === 'spring' ? 0.9 : 0.12)
         } else if (hitK === 'person') {
           const t = S.teams[hitObj.team]; t.footHp -= dmg * 1.4; t.footLast = { team: b.team, t: S.t }; if (b.team >= 0) S.teams[b.team].stats.hits++
-        }
+        } else if (hitK === 'turret') { hitObj.hp -= dmg * 1.5; if (b.team >= 0) S.teams[b.team].stats.hits++ }
         ev(S, { k: 'bhit', w: b.type, what: hitK, team: b.team, x: b.x, y: b.y, z: b.z, vx: b.vx, vz: b.vz })
       }
       B.splice(i, 1); continue
@@ -426,8 +516,23 @@ export function explode(S, x, y, z, by, R, dmg, how) {
   }
 }
 
-// ---------------------------------------------------------------- 地雷・オイル
+// ---------------------------------------------------------------- 地雷・オイル・煙幕・タレット
+function updateGadgets(S, dt) {
+  for (let i = S.smokes.length - 1; i >= 0; i--) { S.smokes[i].life -= dt; if (S.smokes[i].life <= 0) S.smokes.splice(i, 1) }
+  for (let i = S.turrets.length - 1; i >= 0; i--) {
+    const tu = S.turrets[i]; tu.life -= dt
+    if (tu.life <= 0 || tu.hp <= 0) { ev(S, { k: 'turretEnd', x: tu.x, y: tu.y, z: tu.z, dead: tu.hp <= 0 }); S.turrets.splice(i, 1); continue }
+    tu.cd -= dt
+    let best = null, bd = 42
+    for (const c of S.cars) { if (!c.alive || c.team === tu.team || c.team < 0) continue; const d = Math.hypot(c.x - tu.x, c.z - tu.z); if (d < bd && lineClear(tu.x, tu.y + 1.2, tu.z, c.x, c.y + 1.2, c.z) && !smokeBlocks(S, tu.x, tu.z, c.x, c.z)) { bd = d; best = c } }
+    if (best) {
+      const want = Math.atan2(best.x + best.vx * 0.3 - tu.x, best.z + best.vz * 0.3 - tu.z); tu.yaw += clamp(angDiff(want, tu.yaw), -3.2 * dt, 3.2 * dt)
+      if (tu.cd <= 0 && Math.abs(angDiff(want, tu.yaw)) < 0.12) { tu.cd = 0.16; const a = tu.yaw + (S.rng() - 0.5) * 0.05; S.bullets.push({ type: 'paint', team: tu.team, x: tu.x, y: tu.y + 1.3, z: tu.z, px: tu.x, py: tu.y + 1.3, pz: tu.z, vx: Math.sin(a) * 56, vz: Math.cos(a) * 56, vy: 0, life: 1, id: UID++ }); ev(S, { k: 'shot', w: 'paint', team: tu.team, x: tu.x, y: tu.y + 1.3, z: tu.z }) }
+    }
+  }
+}
 function updateMines(S, dt) {
+  updateGadgets(S, dt)
   for (let i = S.mines.length - 1; i >= 0; i--) {
     const m = S.mines[i]; m.life -= dt; m.arm -= dt
     if (m.life <= 0) { S.mines.splice(i, 1); continue }
@@ -452,11 +557,12 @@ function updatePickups(S, dt) {
     if (p.t > 0) { p.t -= dt; if (p.t <= 0) p.type = pickType(S); continue }
     for (const c of S.cars) {
       if (!c.alive || c.team < 0 || Math.hypot(c.x - p.x, c.z - p.z) > 2.6 || Math.abs(c.y - H(p.x, p.z)) > 2) continue
-      const t = S.teams[c.team]
+      const t = S.teams[c.team], IT = ITEMS[p.type]
       if (p.type === 'repair') { const before = c.hp; c.hp = Math.min(100, c.hp + 45); ev(S, { k: 'repair', team: t.id, x: c.x, y: c.y, z: c.z, gain: c.hp - before }) }
       else {
-        if (t.item && t.item.type === p.type) t.item.ammo += ITEM_AMMO[p.type]; else t.item = { type: p.type, ammo: ITEM_AMMO[p.type] }
-        ev(S, { k: 'pickup', team: t.id, type: p.type, x: p.x, y: H(p.x, p.z), z: p.z })
+        const slot = IT.role === 'D' ? 'iD' : 'iG'
+        if (t[slot] && t[slot].type === p.type) t[slot].ammo += IT.ammo; else t[slot] = { type: p.type, ammo: IT.ammo }
+        ev(S, { k: 'pickup', team: t.id, type: p.type, role: IT.role, x: p.x, y: H(p.x, p.z), z: p.z })
       }
       t.stats.pick++
       p.t = 16; break
@@ -530,7 +636,7 @@ function updatePeople(S, inputs, dt, live) {
       p.invT -= dt
       if (p.state === 'fly') {
         p.vy -= G * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt
-        p.x = clamp(p.x, -HALF + 1, HALF - 1); p.z = clamp(p.z, -HALF + 1, HALF - 1)
+        p.x = clamp(p.x, -WORLD + 1.5, WORLD - 1.5); p.z = clamp(p.z, -WORLD + 1.5, WORLD - 1.5)
         const h = H(p.x, p.z)
         if (p.y <= h) { p.y = h; p.state = 'walk'; p.vx = p.vz = p.vy = 0; p.invT = Math.max(p.invT, 1.2); ev(S, { k: 'plant', x: p.x, y: p.y, z: p.z }) }
         else if (solidAtPoint(p.x, p.y + 0.5, p.z)) { p.vx *= -0.3; p.vz *= -0.3 }
@@ -539,7 +645,7 @@ function updatePeople(S, inputs, dt, live) {
     if (p0.state !== 'walk' && p1.state !== 'walk') continue
     // 歩き
     const wx = inp.walkX || 0, wz = inp.walkZ || 0, wl = Math.hypot(wx, wz)
-    const spd = live ? 6.4 : 0
+    const spd = live ? 7.6 : 0
     for (const p of t.p) {
       if (p.state !== 'walk') continue
       let dx = 0, dz = 0
@@ -547,7 +653,7 @@ function updatePeople(S, inputs, dt, live) {
       else { const ex = p0.x - p.x - 1.6, ez = p0.z - p.z + 1.2, d = Math.hypot(ex, ez); if (d > 1.2 && p0.state === 'walk') { dx = ex / d * Math.min(spd * 1.05, d * 3); dz = ez / d * Math.min(spd * 1.05, d * 3); p.yaw = Math.atan2(dx, dz) } }
       let nx = p.x + dx * dt, nz = p.z + dz * dt
       if (H(nx, nz) - p.y > 0.7) { if (H(nx, p.z) - p.y <= 0.7) nz = p.z; else if (H(p.x, nz) - p.y <= 0.7) nx = p.x; else { nx = p.x; nz = p.z } }
-      p.x = clamp(nx, -HALF + 1, HALF - 1); p.z = clamp(nz, -HALF + 1, HALF - 1)
+      p.x = clamp(nx, -WORLD + 1.5, WORLD - 1.5); p.z = clamp(nz, -WORLD + 1.5, WORLD - 1.5)
       const out = []
       for (let k = 0; k < 2; k++) { out.length = 0; if (pushOutCircle(p.x, p.y, p.z, 0.55, 1.8, out)) for (const o of out) { p.x += o[0] * o[2]; p.z += o[1] * o[2] } }
       p.y = H(p.x, p.z)
@@ -572,16 +678,24 @@ function updatePeople(S, inputs, dt, live) {
   }
 }
 function boardCar(S, t, c) {
-  c.team = t.id; t.car = c.id; t.walking = false; c.hp = Math.max(c.hp, 70); c.invT = 1.4; c.mag = WEAPONS.paint.mag; c.heat = 0; c.reloadT = 0; c.gunYaw = c.yaw; c.boost = 1
+  c.team = t.id; t.car = c.id; t.walking = false; c.hp = Math.max(c.hp, 70); c.invT = 1.4; c.gunYaw = c.yaw; c.boost = 1; for (const w of t.ws) { w.mag = WEAPONS[w.id].mag; w.reloadT = 0; w.heat = 0; w.overT = 0 }
   for (const p of t.p) p.state = 'ride'
   if (c.spot >= 0) { S.respawns.push({ spot: c.spot, t: 14 }); c.spot = -1 }
   ev(S, { k: 'board', team: t.id, x: c.x, y: c.y, z: c.z, id: c.id })
 }
 
 // ---------------------------------------------------------------- 問い合わせ（人の照準補助・CPU が使う）
+// 煙幕が、a から b への線をさえぎるか
+export function smokeBlocks(S, ax, az, bx, bz) {
+  for (const m of S.smokes) {
+    const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1; let t = ((m.x - ax) * dx + (m.z - az) * dz) / l2; t = clamp(t, 0, 1)
+    if (Math.hypot(ax + dx * t - m.x, az + dz * t - m.z) < m.r * 0.85) return true
+  }
+  return false
+}
 export function enemiesOf(S, team) { return S.cars.filter(c => c.alive && c.team >= 0 && c.team !== team) }
 // 人が狙う時の補助: 照準の近く(±cone)にいる敵を探して、先読みした向きを返す
-export function assistAim(S, car, yaw, cone = 0.14, range = 55) {
+export function assistAim(S, car, yaw, cone = 0.14, range = 70) {
   let best = null, bs = 1e9
   const my = car.y + 2.15
   for (const c of S.cars) {

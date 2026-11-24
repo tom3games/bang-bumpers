@@ -1,6 +1,6 @@
 // 車と人の見た目。おもちゃのバンパーカー。曲面の車体・太いタイヤ・屋根の射手台・旗
 import * as THREE from 'three'
-import { numberTexture } from './textures.js'
+import { numberTexture, grimeTexture } from './textures.js'
 import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js'
 
 const cache = {}
@@ -44,12 +44,13 @@ export class Baker {
   }
   mesh(mat, shadow = true) { if (!this.geos.length) return null; const o = new THREE.Mesh(mergeGeometries(this.geos), mat); o.castShadow = shadow; o.receiveShadow = true; return o }
 }
-let TRIM, LIGHTM
-export function buildCar(color, num = 1) {
+let TRIM, LIGHTM, GRIME
+export function buildCar(color, num = 1, type = 0) {
   const m = mats()
   TRIM = TRIM || new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.45 })
   LIGHTM = LIGHTM || new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })
-  const paint = new THREE.MeshPhysicalMaterial({ color, roughness: 0.34, metalness: 0.2, clearcoat: 0.9, clearcoatRoughness: 0.12 })
+  GRIME = GRIME || (() => { const g = grimeTexture(); g.repeat.set(0.5, 0.5); return g })()
+  const paint = new THREE.MeshPhysicalMaterial({ color, map: GRIME, roughness: 0.38, metalness: 0.2, clearcoat: 0.85, clearcoatRoughness: 0.18 })
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body)
   const bkP = new Baker(), bkT = new Baker(), bkG = new Baker(), bkL = new Baker()
   // 車体と運転台
@@ -71,6 +72,10 @@ export function buildCar(color, num = 1) {
   bkT.add(rbox(0.56, 0.5, 0.36, 0.14), dp[0], dp[1], dp[2], 0x31363b, 0, 0, 0, 0.85, 0.85, 0.85)
   bkT.add(G('head', () => new THREE.SphereGeometry(0.2, 12, 10)), dp[0], dp[1] + 0.72 * 0.85, dp[2], 0xe8b890, 0, 0, 0, 0.85, 0.85, 0.85)
   bkT.add(G('gog', () => new THREE.BoxGeometry(0.34, 0.1, 0.1)), dp[0], dp[1] + 0.74 * 0.85, dp[2] + 0.17 * 0.85, 0x1e3340, 0, 0, 0, 0.85, 0.85, 0.85)
+  // 車の種類ごとの見た目の違い
+  if (type === 1) { bkT.add(G('spoilerP', () => new THREE.BoxGeometry(1.9, 0.08, 0.5)), 0, 1.5, -2.0, 0x1c1d1f); for (const sd of [-0.7, 0.7]) bkT.add(G('spoilerL', () => new THREE.BoxGeometry(0.08, 0.5, 0.4)), sd, 1.25, -2.0, 0x1c1d1f); bkT.add(G('fastS', () => new THREE.BoxGeometry(0.2, 0.03, 4.0)), 0.4, 1.22, 0, 0xf4f0e6).add(G('fastS', () => new THREE.BoxGeometry(0.2, 0.03, 4.0)), -0.4, 1.22, 0, 0xf4f0e6) }
+  if (type === 2) { bkT.add(G('bullB', () => new THREE.BoxGeometry(2.4, 0.18, 0.2)), 0, 0.95, 2.45, 0xb8bcc0).add(G('bullB', () => new THREE.BoxGeometry(2.4, 0.18, 0.2)), 0, 0.55, 2.45, 0xb8bcc0); for (const sd of [-1.1, 0, 1.1]) bkT.add(G('bullP', () => new THREE.BoxGeometry(0.16, 0.6, 0.2)), sd, 0.75, 2.45, 0xb8bcc0); for (const sd of [-0.5, 0.5]) bkT.add(G('stack', () => new THREE.CylinderGeometry(0.1, 0.1, 1.0, 8)), sd, 2.2, -1.45, 0x6f7377) ; bkT.add(G('roofL', () => new THREE.BoxGeometry(1.5, 0.12, 0.2)), 0, 1.9, 0.5, 0xe8b81c) }
+  if (type === 3) { for (const sd of [-1, 1]) bkT.add(G('fin', () => new THREE.BoxGeometry(0.06, 0.45, 0.9)), sd * 1.0, 1.55, -1.5, 0xf4f0e6, 0, 0, sd * 0.25); bkT.add(G('agB', () => new THREE.BoxGeometry(1.95, 0.1, 0.1)), 0, 0.62, 2.18, 0xf4f0e6) }
   const parts = { F: [], B: [], L: [], R: [] }
   const one = (bk, mat, shadow = true) => { const o = bk.mesh(mat, shadow); if (o) body.add(o); return o }
   one(bkP, paint); one(bkT, TRIM); const gm = one(bkG, m.glass, false); one(bkL, LIGHTM, false)
@@ -114,10 +119,15 @@ export function buildCar(color, num = 1) {
   const helmG = new THREE.Mesh(helmGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.4 })); helmG.position.set(0, 0.8, 0); helmG.castShadow = true; turret.add(helmG)
   const helmD = new THREE.Mesh(helmGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.4 })); helmD.position.set(dp[0], dp[1] + 0.74 * 0.85, dp[2]); helmD.scale.setScalar(0.85); body.add(helmD)
   const flash = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })); flash.position.set(0, 0.56, 1.9); flash.visible = false; turret.add(flash)
+  // 槍（槍のアイテムを使った間だけ出る）
+  const spear = new THREE.Group()
+  { const sh = new THREE.Mesh(G('spearS', () => { const g = new THREE.CylinderGeometry(0.13, 0.16, 3.2, 10); g.rotateX(Math.PI / 2); return g }), new THREE.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.25, metalness: 0.95 })); sh.position.z = 1.6; spear.add(sh)
+    const tp = new THREE.Mesh(G('spearT', () => { const g = new THREE.ConeGeometry(0.3, 1.1, 10); g.rotateX(Math.PI / 2); return g }), new THREE.MeshStandardMaterial({ color: 0xe8b81c, roughness: 0.3, metalness: 0.8 })); tp.position.z = 3.6; spear.add(tp) }
+  spear.position.set(0, 0.8, 2.2); spear.visible = false; spear.scale.z = 0.01; body.add(spear)
   // 空き車の目印（黄色い灯り）
   const beacon = new THREE.Mesh(G('beacon', () => new THREE.CylinderGeometry(0.12, 0.16, 0.22, 10)), new THREE.MeshStandardMaterial({ color: 0xffb000, emissive: 0xffa000, emissiveIntensity: 1.2 }))
   beacon.position.set(0, 2.2, -0.3); beacon.visible = false; body.add(beacon)
-  return { g: root, body, paint, parts, wheels, turret, gun: { flash, helm: helmG }, drv: { helm: helmD }, hood, hoodPivot, flag, bumpF, bumpB, beacon, fl, glass: gm, base: new THREE.Color(color), num }
+  return { g: root, body, spear, paint, parts, wheels, turret, gun: { flash, helm: helmG }, drv: { helm: helmD }, hood, hoodPivot, flag, bumpF, bumpB, beacon, fl, glass: gm, base: new THREE.Color(color), num }
 }
 
 // 歩く人（全身。足と腕が動く）

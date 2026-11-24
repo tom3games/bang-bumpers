@@ -1,14 +1,14 @@
 // CPU の頭。運転役・射手役・歩きを別々に作り、makeInputs で人の入力と混ぜて チームごとの入力 にする。
 // 状態(S)は読むだけ。サーバーに移しても同じ関数がそのまま動く。
-import { H, HALF, pushOutCircle, lineClear, clamp } from './arena.js'
-import { angDiff, enemiesOf, circles, WEAPONS, specialWeapon, CAR_R } from './sim.js'
+import { H, WORLD, HALF, DOORS, pushOutCircle, lineClear, clamp } from './arena.js'
+import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js'
 
 const MEM = new WeakMap()
 const mem = t => { let m = MEM.get(t); if (!m) { m = { stuckT: 0, revT: 0, lx: 0, lz: 0, lt: 0, tgt: -1, tgtT: 0, gtgt: -1, gT: 0, noise: 0, burst: 0, rest: 0.5, aim: null, side: 1, seed: t.id * 7.13 + 1, walkStuck: 0, wlx: 0, wlz: 0, wt: 0, wside: 1, dropT: 3 + t.id }; MEM.set(t, m) } return m }
 export const STYLE = ['flank', 'rammer', 'circler', 'rammer', 'circler']
 
 function blocked(S, x, z, y, self) {
-  if (Math.abs(x) > HALF - 2.2 || Math.abs(z) > HALF - 2.2) return true
+  if (Math.abs(x) > WORLD - 2.2 || Math.abs(z) > WORLD - 2.2) return true
   if (H(x, z) - y > 0.5) return true
   const out = []
   if (pushOutCircle(x, y, z, CAR_R + 0.35, 1.6, out)) return true
@@ -46,26 +46,29 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
   const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), sp = c.vx * fx + c.vz * fz
   // 詰まり検知
   m.lt += dt
-  if (m.lt > 1.2) { const moved = Math.hypot(c.x - m.lx, c.z - m.lz); if (moved < 0.9 && !c.air && m.revT <= 0 && S.phase === 'play') { m.revT = 1.1; m.side = -m.side } m.lx = c.x; m.lz = c.z; m.lt = 0 }
+  if (m.lt > 1.2) { const moved = Math.hypot(c.x - m.lx, c.z - m.lz); if (moved < 0.9 && !c.air && m.revT <= 0 && S.phase === 'play') { m.revT = 1.1; m.side = -m.side; m.stuckN = (S.t - (m.stuckAt || -99) < 9 ? (m.stuckN || 0) + 1 : 1); m.stuckAt = S.t; if (m.stuckN >= 2) { let bestA = 0, bestD = -1; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283, fd = freeDist(S, c, a, 40); if (fd > bestD + S.rng() * 3) { bestD = fd; bestA = a } } m.wander = { x: c.x + Math.sin(bestA) * 35, z: c.z + Math.cos(bestA) * 35, until: S.t + 6 } } } m.lx = c.x; m.lz = c.z; m.lt = 0 }
   if (m.revT > 0) { m.revT -= dt; return { throttle: -1, steer: m.side * 0.9, boost: false } }
   const tg = pickTarget(S, t, c, m, dt, humanGunAim)
   let gx = 0, gz = 0, mode = 'idle', want = 1, boost = false
+  const wandering = m.wander && S.t < m.wander.until
   // 拾い物
   let pk = null
-  if (!tg || Math.hypot(tg.x - c.x, tg.z - c.z) > 16 || c.hp < 50) {
+  if (!tg || Math.hypot(tg.x - c.x, tg.z - c.z) > 24 || c.hp < 50) {
     let bd = 1e9
     for (const p of S.pickups) {
       if (p.t > 0) continue
       const d = Math.hypot(p.x - c.x, p.z - c.z)
-      const need = c.hp < 55 ? (p.type === 'repair' ? 1 : 0.35) : (t.item ? (p.type === 'repair' && c.hp < 85 ? 0.8 : 0) : 1)
-      if (need <= 0 || d > (need >= 1 ? 52 : 26)) continue
+      const slotFull = p.type === 'repair' ? false : (['turbo', 'spear', 'oil', 'mine'].includes(p.type) ? t.iD : t.iG)
+      const need = c.hp < 55 ? (p.type === 'repair' ? 1 : 0.35) : (p.type === 'repair' ? (c.hp < 85 ? 0.8 : 0) : (slotFull ? 0 : 1))
+      if (need <= 0 || d > (need >= 1 ? 95 : 45)) continue
       if (d / need < bd) { bd = d / need; pk = p }
     }
   }
-  if (pk && (c.hp < 50 || !tg || Math.hypot(tg.x - c.x, tg.z - c.z) > 22)) { gx = pk.x; gz = pk.z; mode = 'pick' }
+  if (wandering) { gx = m.wander.x; gz = m.wander.z; mode = 'wander' }
+  else if (pk && (c.hp < 50 || !tg || Math.hypot(tg.x - c.x, tg.z - c.z) > 34)) { gx = pk.x; gz = pk.z; mode = 'pick' }
   else if (tg) {
     const dx = tg.x - c.x, dz = tg.z - c.z, d = Math.hypot(dx, dz)
-    if (c.hp < 28 && d < 30) { // 逃げる
+    if (c.hp < 28 && d < 40) { // 逃げる
       const a = Math.atan2(-dx, -dz); gx = c.x + Math.sin(a) * 30; gz = c.z + Math.cos(a) * 30; mode = 'flee'; boost = true
     } else if (style === 'rammer') {
       const lead = Math.min(1.2, d / 25); gx = tg.x + tg.vx * lead; gz = tg.z + tg.vz * lead; mode = 'ram'; boost = d > 18
@@ -81,6 +84,14 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
       boost = d > 28
     }
   } else { gx = 0; gz = 0; mode = 'idle'; want = 0.6 }
+  // 建屋の中と外をまたぐ時は、いちばん近い出入口を通る
+  { const inH = (x, z) => Math.abs(x) < HALF - 1.5 && Math.abs(z) < HALF - 1.5
+    if (inH(c.x, c.z) !== inH(gx, gz) && mode !== 'idle') {
+      const doors = [...DOORS.S.map(x => [x, HALF, 0, 1]), ...DOORS.E.map(z => [HALF, z, 1, 0]), ...DOORS.W.map(z => [-HALF, z, -1, 0])]
+      let best = null, bd = 1e9
+      for (const [dx, dz, nx, nz] of doors) { const d = Math.hypot(dx - c.x, dz - c.z) + Math.hypot(dx - gx, dz - gz); if (d < bd) { bd = d; best = [dx, dz, nx, nz] } }
+      if (best) { const [dx, dz, nx, nz] = best, out = !inH(c.x, c.z), near = Math.hypot(dx - c.x, dz - c.z) < 13, s = near ? (out ? -14 : 14) : (out ? 10 : -10); gx = dx + nx * s; gz = dz + nz * s }
+    } }
   let goal = Math.atan2(gx - c.x, gz - c.z)
   // よける: 目標の向きから左右にずらして一番近い空いた向き
   const L = 6 + Math.max(0, sp) * 0.5
@@ -102,22 +113,48 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
   if (!found && bestFree < 3 && sp < 3) { m.revT = 0.9; m.side = -m.side }
   if (Math.abs(diff) > 2.4 && sp < 3) { thr = -0.6; steer = -steer }
   if (c.oilT > 0) { thr = Math.min(thr, 0.4) }
-  return { throttle: thr, steer, boost: boost && Math.abs(diff) < 0.35 && c.boost > 0.5 && cur > 12 }
+  // 役のアイテム（運転）
+  m.useT = (m.useT ?? 2) - dt
+  let useD = false
+  if (t.iD && m.useT <= 0) {
+    const it = t.iD.type, en = enemiesOf(S, t.id)
+    let behind = false, dnear = 999; for (const e of en) { const d = Math.hypot(e.x - c.x, e.z - c.z); dnear = Math.min(dnear, d); const lx = (e.x - c.x) * fx + (e.z - c.z) * fz; if (lx < -2 && d < 22) behind = true }
+    if (it === 'turbo' && ((mode === 'ram' || mode === 'flank') && tg && Math.hypot(tg.x - c.x, tg.z - c.z) > 30 || mode === 'flee') && Math.abs(diff) < 0.4) useD = true
+    else if (it === 'spear' && tg && mode === 'ram' && Math.hypot(tg.x - c.x, tg.z - c.z) < 26 && Math.abs(diff) < 0.3) useD = true
+    else if ((it === 'oil' || it === 'mine') && behind) useD = true
+    m.useT = useD ? 4 : 0.8
+  }
+  return { throttle: thr, steer, boost: boost && Math.abs(diff) < 0.35 && c.boost > 0.5 && cur > 12, useD }
 }
 
-// 射手: 見える敵を選び、先読みして追う。人の速さの遅れとぶれを入れる
+// 射手: 見える敵を選び、先読みして追う。人の速さの遅れとぶれを入れる。距離で銃を持ち替え、役のアイテムも使う
+function chooseWeapon(t, dist) {
+  let best = t.wSel, bs = -1
+  t.ws.forEach((w, i) => {
+    const W = WEAPONS[w.id]; let s = 0.5
+    if (w.mag <= 0 || w.reloadT > 0) s = -1
+    else if (w.id === 'rocket') s = dist > 14 && dist < 62 ? 3 : 0.6
+    else if (w.id === 'confetti') s = dist < 19 ? 3 : 0.3
+    else if (w.id === 'cork') s = dist > 26 ? 2.6 : 1
+    else if (w.id === 'spring') s = dist > 8 && dist < 36 ? 2 : 0.8
+    else s = 1.6 + (w.heat < 0.6 ? 0.5 : -0.5)
+    if (i === t.wSel) s += 0.7
+    void W
+    if (s > bs) { bs = s; best = i }
+  })
+  return best
+}
 export function cpuGun(S, t, c, dt) {
   const m = mem(t)
   m.gT -= dt
-  let tgt = null
   const my = c.y + 2.15
   if (m.gT <= 0) {
     m.gT = 0.25 + (m.seed % 0.2)
     let best = null, bs = 1e9
     for (const e of S.cars) {
       if (!e.alive || e.team === t.id || e.team < 0) continue
-      const d = Math.hypot(e.x - c.x, e.z - c.z); if (d > 52) continue
-      if (!lineClear(c.x, my, c.z, e.x, e.y + 1.1, e.z)) continue
+      const d = Math.hypot(e.x - c.x, e.z - c.z); if (d > 72) continue
+      if (!lineClear(c.x, my, c.z, e.x, e.y + 1.1, e.z) || smokeBlocks(S, c.x, c.z, e.x, e.z)) continue
       const sc = d - (e.hp < 40 ? 10 : 0) - (e.id === m.gtgt ? 8 : 0)
       if (sc < bs) { bs = sc; best = { kind: 'car', id: e.id } }
     }
@@ -138,25 +175,29 @@ export function cpuGun(S, t, c, dt) {
   const want = tx != null ? Math.atan2(tx - c.x, tz - c.z) + m.noise * (0.025 + dist * 0.0012) : c.yaw + Math.sin(S.t * 0.7 + m.seed) * 1.4
   const dv = angDiff(want, c.gunYaw), rate = 2.8
   const aim = c.gunYaw + clamp(dv, -rate * dt, rate * dt)
-  // 撃つ: 一定の長さで撃って休む（熱くしない）
+  const wsel = tx != null ? chooseWeapon(t, dist) : t.wSel
+  const w = t.ws[wsel], W = WEAPONS[w.id]
   m.burst -= dt
   let fire = false
-  const sp = specialWeapon(t)
-  if (tx != null && Math.abs(angDiff(want, aim)) < 0.08 + 1.5 / Math.max(8, dist) * 0.5 && dist < 50) {
-    if (m.burst > 0) fire = true
+  const range = w.id === 'confetti' ? 20 : w.id === 'spring' ? 36 : w.id === 'rocket' ? 62 : w.id === 'cork' ? 72 : 62
+  if (wsel === t.wSel && tx != null && Math.abs(angDiff(want, aim)) < 0.08 + 1.5 / Math.max(8, dist) * 0.5 && dist < range && !(w.id === 'rocket' && dist < 9)) {
+    if (w.id !== 'paint') fire = true
+    else if (m.burst > 0) fire = true
     else if (m.burst < -m.rest) { m.burst = 0.7 + S.rng() * 0.9; m.rest = 0.25 + S.rng() * 0.5 }
-    if (sp && sp.type === 'rocket' && dist < 9) fire = false
-    if (sp && sp.type === 'confetti' && dist > 24) fire = false
-    if (c.heat > 0.8) fire = false
+    if (w.id === 'paint' && w.heat > 0.8) fire = false
   }
-  // アイテム: 敵が近くにいる時に地雷とオイルを落とす
+  // 役のアイテム（射手）
   m.dropT -= dt
-  let use = false
-  if (t.item && (t.item.type === 'mine' || t.item.type === 'oil') && m.dropT <= 0) {
-    const near = enemiesOf(S, t.id).some(e => Math.hypot(e.x - c.x, e.z - c.z) < 20)
-    if (near) { use = true; m.dropT = 7 + S.rng() * 5 } else m.dropT = 1
+  let useG = false
+  if (t.iG && m.dropT <= 0) {
+    const it = t.iG.type, en = enemiesOf(S, t.id), near = en.reduce((d, e) => Math.min(d, Math.hypot(e.x - c.x, e.z - c.z)), 999)
+    if (it === 'grenade' && tx != null && dist > 8 && dist < 32) useG = true
+    else if (it === 'smoke' && (c.hp < 45 && near < 38)) useG = true
+    else if (it === 'ricochet' && near < 46) useG = true
+    else if (it === 'turret' && near < 38) useG = true
+    if (useG) m.dropT = it === 'grenade' ? 1.4 : 6 + S.rng() * 4; else m.dropT = 0.6
   }
-  return { aim, fire, reload: c.mag < 6 && !fire, use }
+  return { aim, fire, reload: w.mag < W.mag * 0.25 && !fire, useG, wsel }
 }
 
 export function cpuWalk(S, t, dt) {
@@ -192,7 +233,7 @@ export function makeInputs(S, dt, human) {
     const humanDrives = isH && t.driver === 0, humanGuns = isH && t.driver === 1
     const dr = humanDrives ? human.drive : cpuDrive(S, t, c, dt, humanGuns ? c.gunYaw : null)
     const gn = humanGuns ? human.gun : cpuGun(S, t, c, dt)
-    Object.assign(o, { throttle: dr.throttle, steer: dr.steer, boost: dr.boost, aim: gn.aim, fire: gn.fire, reload: gn.reload, assist: gn.assist, use: !!(gn.use || (isH && human.use)), swap: !!(isH && human.swap) })
+    Object.assign(o, { throttle: dr.throttle, steer: dr.steer, boost: dr.boost, hb: !!dr.hb, aim: gn.aim, fire: gn.fire, reload: gn.reload, assist: gn.assist, wsel: gn.wsel, wswap: !!(humanGuns && human.wswap), useD: humanDrives ? !!human.use : !!dr.useD, useG: humanGuns ? !!human.use : !!gn.useG, swap: !!(isH && human.swap) })
     out[t.id] = o
   }
   return out

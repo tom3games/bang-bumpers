@@ -75,7 +75,7 @@ body.touch .how .pc{display:none}body.touch .how .tp{display:grid}
 #msg{position:absolute;left:8px;right:8px;top:27%;text-align:center;font:900 clamp(64px,22vw,150px)/1 var(--num);color:var(--c);text-shadow:0 6px 0 rgba(0,0,0,.45);letter-spacing:.04em;overflow:hidden;padding:0 0 10px}
 #msg.sm{font-size:clamp(36px,11vw,76px);color:var(--y)}
 #msg.pop{animation:pop .5s cubic-bezier(.2,1.6,.4,1)}
-@keyframes pop{from{transform:scale(1.5);opacity:0}}
+@keyframes pop{from{opacity:0;letter-spacing:.25em}}
 #msg small{display:block;font:700 14px var(--jp);letter-spacing:.1em;color:var(--c);margin-top:6px;text-shadow:none}
 #cross{position:absolute;left:50%;top:44%;width:40px;height:40px;margin:-20px 0 0 -20px}
 #cross::before,#cross::after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
@@ -170,3 +170,109 @@ body:not(.touch) .rb.mute{display:block}
 @media (max-height:700px){.logo h1{font-size:clamp(52px,17vw,100px)}.tape{margin-top:12px}.how .note{display:none}}
 .shake{animation:sh .3s}
 @keyframes sh{20%{transform:translate(-3px,2px)}40%{transform:translate(3px,-2px)}60%{transform:translate(-2px,1px)}}
+
+/* ---- 役の色: 運転=オレンジ / 射手=シアン（アイテム・拾い物・札・ボタンで同じ色） ---- */
+:root{--drv:#f08a1e;--gun:#1fa6cf}
+body.r-drive{--role:var(--drv)}body.r-shoot{--role:var(--gun)}body.r-walk{--role:var(--y)}
+#role{background:var(--role,var(--y))}
+#role::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;background:var(--k);transform:rotate(45deg)}
+.g.itm b{background:var(--ic,var(--y));color:#101010}
+.g.itm.d{--ic:var(--drv)}.g.itm.g{--ic:var(--gun)}
+
+/* 準備画面 */
+#prep{display:flex;flex-direction:column;padding:calc(var(--st) + 10px) 14px calc(var(--sb) + 10px);background:linear-gradient(180deg,rgba(18,17,15,.86) 0%,rgba(18,17,15,.7) 55%,rgba(18,17,15,.9) 100%);overflow:hidden}
+.ptop{display:flex;align-items:flex-end;gap:14px;margin-bottom:10px}
+#pcount{display:flex;flex-direction:column;align-items:center;min-width:92px;background:var(--k);border:3px solid var(--y);padding:2px 10px 4px;box-shadow:0 4px 0 rgba(0,0,0,.45)}
+#pcount b{font:900 64px/.95 var(--num);color:#ffd84a;font-variant-numeric:tabular-nums;text-shadow:0 0 14px rgba(255,200,40,.45)}
+#pcount.low b{color:#ff5a3c;animation:tick .5s ease-in-out infinite alternate}
+@keyframes tick{to{transform:scale(1.14)}}
+#pcount span{font-size:11px;letter-spacing:.14em;color:var(--c)}
+.pttl{flex:1;min-width:0;transform:rotate(-1.4deg);transform-origin:0 100%}
+#pRole{display:inline-block;background:var(--pc,var(--drv));color:#101010;font:900 12px var(--jp);letter-spacing:.2em;padding:2px 10px}
+#pHead{font:900 clamp(30px,9vw,46px)/1 var(--jp);letter-spacing:.02em;margin-top:4px;color:var(--c)}
+#pcards{flex:1;min-height:0;display:grid;gap:10px;align-content:start;overflow:hidden}
+#pcards.cars{grid-template-columns:1fr 1fr}
+#pcards.guns{grid-template-columns:1fr 1fr}
+.card{position:relative;text-align:left;background:linear-gradient(180deg,#2a2824,#1b1a17);border:2px solid #4a463e;border-top:6px solid var(--pc,var(--drv));padding:9px 10px 10px;display:flex;flex-direction:column;gap:5px;transition:transform .12s,border-color .12s;min-height:0}
+.card:active{transform:scale(.97)}
+.card.sel{border-color:var(--y);background:linear-gradient(180deg,#38342a,#222019);box-shadow:0 0 0 2px var(--y),0 8px 22px rgba(0,0,0,.5)}
+.card .ic{height:44px;color:var(--pc);display:flex;align-items:center}
+.card .ic svg{height:100%;width:auto}
+.card h3{font:900 22px/1 var(--jp);letter-spacing:.02em;color:var(--c)}
+.card .nt{font-size:11px;line-height:1.35;font-weight:500;color:#cfc9b8;min-height:30px}
+.card .bars{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center;font:700 10px var(--jp);color:#a8a290}
+.card .bars i{display:flex;gap:2px}.card .bars u{display:block;width:100%;height:6px;background:#3a372f}.card .bars u.on{background:var(--pc)}
+.card .slot{position:absolute;right:8px;top:8px;width:26px;height:26px;display:none;place-items:center;background:var(--y);color:#101010;font:900 16px var(--num);transform:rotate(45deg)}
+.card .slot b{transform:rotate(-45deg)}
+.card.sel .slot{display:grid}
+.card .tick{position:absolute;right:8px;top:8px;width:24px;height:24px;display:none;background:var(--y)}
+.card.sel .tick{display:block;clip-path:polygon(0 50%,18% 38%,40% 62%,82% 12%,100% 28%,40% 92%)}
+.pfoot{margin-top:8px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+#pmate{display:flex;flex-direction:column;gap:2px;background:rgba(0,0,0,.4);border-left:5px solid var(--pc2,var(--gun));padding:5px 10px}
+#pmate .lab{font:800 10px var(--num);letter-spacing:.18em;color:var(--g)}
+#pmName{font:900 15px var(--jp);color:var(--c)}#pmPick{font-style:normal;font-size:11px;color:#cfc9b8;font-weight:500}
+.pname{display:flex;flex-direction:column;gap:2px;font:800 10px var(--num);letter-spacing:.18em;color:var(--g)}
+.pname input{width:128px;background:#111;border:2px solid #4a463e;color:var(--c);font:700 15px var(--jp);padding:5px 8px;border-radius:0;-webkit-user-select:text;user-select:text}
+.pname input:focus{outline:none;border-color:var(--y)}
+.pnote{margin-top:6px;font-size:11px;color:var(--g);text-align:center}
+
+/* 相棒の札と銃の枠 */
+#partner{position:absolute;left:calc(var(--sl) + 134px);right:calc(var(--sr) + 106px);top:calc(var(--st) + 86px);display:flex;align-items:center;gap:6px;background:rgba(23,22,20,.78);padding:2px 6px;font-size:10.5px;white-space:nowrap;overflow:hidden;border-left:4px solid var(--pc2,var(--gun))}
+#partner span{overflow:hidden;text-overflow:ellipsis}
+#partner b{font:800 12px var(--jp);color:var(--c)}#partner span{color:#cfc9b8;font-weight:500}
+#partner i{display:none;width:9px;height:9px;transform:rotate(45deg);background:var(--ic)}#partner.has i{display:block}
+body.touch #hint{top:calc(var(--st) + 112px)}
+#wslots{position:absolute;display:none;gap:6px;left:calc(var(--sl) + 10px);bottom:calc(var(--sb) + var(--inapp) + 132px)}
+body.r-shoot #wslots{display:flex}
+.ws{display:flex;flex-direction:column;gap:2px;min-width:92px;background:rgba(23,22,20,.82);border-left:5px solid #5a564c;padding:3px 8px;font-size:11px;opacity:.7}
+.ws.on{opacity:1;border-left-color:var(--gun);background:rgba(18,40,48,.9)}
+.ws b{font:900 12px var(--jp);color:var(--c);white-space:nowrap}.ws em{font-style:normal;font:800 13px var(--num);color:var(--c)}
+.ws i{display:block;height:4px;background:#3a372f}.ws u{display:block;height:100%;background:var(--gun)}.ws.hot u{background:#ff5a3c}.ws.rl u{background:#8a8676}
+body.r-shoot #hint{}
+/* スマホ: アクセル／バックは押している間だけ。親指の届く右下にまとめる */
+.rb.gear{display:none}
+.rb span{position:absolute;bottom:3px;left:0;right:0;text-align:center;font:800 10px var(--jp);color:var(--c);letter-spacing:.05em}
+.rb.gas{width:84px;height:118px;right:calc(var(--sr) + 12px);bottom:calc(var(--sb) + var(--inapp) + 16px);border-color:var(--drv);border-width:4px}
+.rb.gas svg{width:52%;height:58%;margin-bottom:12px;stroke:var(--drv)}
+.rb.gas.on svg{stroke:var(--k)}
+.rb.back{width:70px;height:70px;border-radius:16px;right:calc(var(--sr) + 104px);bottom:calc(var(--sb) + var(--inapp) + 16px)}
+.rb.back svg{width:50%;height:50%;margin-bottom:12px}
+.rb.boost{width:58px;height:58px;right:calc(var(--sr) + 108px);bottom:calc(var(--sb) + var(--inapp) + 96px);border-color:var(--drv)}
+.rb.item{width:54px;height:54px;right:calc(var(--sr) + 20px);bottom:calc(var(--sb) + var(--inapp) + 144px);border-color:var(--ic,var(--y))}
+body.r-drive .rb.item{right:calc(var(--sr) + 24px);bottom:calc(var(--sb) + var(--inapp) + 146px);--ic:var(--drv)}
+body.r-shoot .rb.item{--ic:var(--gun)}
+body.r-drive .rb.swap{right:calc(var(--sr) + 28px);bottom:calc(var(--sb) + var(--inapp) + 210px)}
+.rb.wswap{width:56px;height:56px;right:calc(var(--sr) + 124px);bottom:calc(var(--sb) + var(--inapp) + 96px);border-color:var(--gun)}
+.rb.fire{width:104px;height:104px;border-color:var(--gun);right:calc(var(--sr) + 12px);bottom:calc(var(--sb) + var(--inapp) + 20px)}
+.rb.fire svg{stroke:var(--gun)}.rb.fire svg .f{fill:var(--gun)}
+.rb.reload{right:calc(var(--sr) + 126px);bottom:calc(var(--sb) + var(--inapp) + 26px)}
+body.r-shoot .rb.item{right:calc(var(--sr) + 24px);bottom:calc(var(--sb) + var(--inapp) + 136px)}
+body.r-shoot .rb.swap{right:calc(var(--sr) + 28px);bottom:calc(var(--sb) + var(--inapp) + 200px)}
+#wind{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}
+#hud,#prep{z-index:6}
+@media (min-width:900px) and (pointer:fine){
+  #prep{padding:40px 6vw 28px}#pcards.cars,#pcards.guns{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .card .ic{height:60px}.card h3{font-size:26px}.card .nt{font-size:12px}
+  #partner{top:calc(var(--st) + 98px)}#wslots{bottom:90px}
+}
+/* 準備画面: 車が見えるように、札は下に寄せる */
+#prep{background:linear-gradient(180deg,rgba(18,17,15,.82) 0%,rgba(18,17,15,.18) 22%,rgba(18,17,15,0) 40%,rgba(18,17,15,.7) 62%,rgba(18,17,15,.92) 100%)}
+#pcards{flex:0 0 auto;margin-top:auto}
+@media (max-width:600px){
+  .card{padding:6px 9px 8px;gap:3px;border-top-width:5px}
+  .card .ic{height:30px}.card h3{font-size:19px}.card .nt{min-height:0;font-size:10.5px;line-height:1.3}
+  .card .bars{font-size:9.5px;gap:1px 6px}.card .bars u{height:5px}
+  #pcards{gap:8px}
+  .pnote{margin-top:4px}
+}
+@media (min-width:900px) and (pointer:fine){#partner{left:50%;right:auto;transform:translateX(-50%);max-width:420px}}
+
+.g.gun{display:none!important}
+@media (max-width:600px){.seat{grid-template-columns:34px 1fr;column-gap:8px;padding:10px 8px}.seat svg{width:34px;height:34px}.seat b{font-size:23px}.seat span{font-size:10px}}
+
+/* 右手の並び（運転）: 下段=バック・アクセル / 中段=ドリフト / 上段=ブースト・アイテム */
+.rb.hb{width:58px;height:58px;right:calc(var(--sr) + 108px);bottom:calc(var(--sb) + var(--inapp) + 94px);border-color:var(--drv)}
+.rb.boost{right:calc(var(--sr) + 28px);bottom:calc(var(--sb) + var(--inapp) + 144px)}
+body.r-drive .rb.item{right:calc(var(--sr) + 98px);bottom:calc(var(--sb) + var(--inapp) + 160px)}
+body.r-drive .rb.swap{right:calc(var(--sr) + 30px);bottom:calc(var(--sb) + var(--inapp) + 210px)}
+body.touch #wslots{flex-direction:column;gap:4px}body.touch .ws{min-width:108px}

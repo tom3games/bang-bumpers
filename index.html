@@ -45,6 +45,7 @@
 </head>
 <body>
 <div id="view"></div>
+<canvas id="wind"></canvas>
 
 <div id="loading"><div class="lt">BANG<br>BUMPERS</div><div class="lb"><i id="loadbar"></i></div><div class="ls" data-en="Warming up the arena">アリーナを温め中</div></div>
 
@@ -64,12 +65,13 @@
   <div class="how">
     <dl class="pc">
       <dt>W S A D</dt><dd data-en="Gas · Brake/Reverse · Steer (Shift = boost)">アクセル・ブレーキ/バック・ハンドル（Shift でブースト）</dd>
+      <dt>X · Tab · 1 2</dt><dd data-en="Swap guns (shooter)">銃の持ち替え（射手）</dd>
       <dt data-en="Mouse · Click">マウス・クリック</dt><dd data-en="Aim · Fire (A D also turns the aim)">ねらう・撃つ（A D でも向きを変えられる）</dd>
       <dt>R · E · Q</dt><dd data-en="Reload · Use item · Swap seats (stopped for 3 s)">リロード・アイテム・役を交代（止まって3秒）</dd>
     </dl>
     <dl class="tp">
-      <dt data-en="Driver">運転</dt><dd data-en="Left arrows steer, hold the pedal to go. R switches reverse.">左の矢印でハンドル、ペダルを押している間だけ進む。Rで後ろ向き</dd>
-      <dt data-en="Shooter">射手</dt><dd data-en="Drag the screen to aim, hold the big button to fire.">画面をなぞって向きを変え、大きなボタンで撃つ</dd>
+      <dt data-en="Driver">運転</dt><dd data-en="Left arrows steer. Hold Gas to go, hold Back to brake and reverse.">左の矢印でハンドル。右の「アクセル」を押している間だけ進み、「バック」でブレーキと後退</dd>
+      <dt data-en="Shooter">射手</dt><dd data-en="Drag to aim, big button fires, the swap button changes guns.">画面をなぞって向き、大きなボタンで撃つ。持ち替えで銃を替える</dd>
     </dl>
     <p class="note" data-en="Cars lose HP from hits, bullets and blasts. Lose all 3 cars and your team is out. When yours blows up you are thrown out: run to a grey spare car.">体当たり・弾・爆発で壊れる。3台壊れたら脱落。壊れると2人とも放り出されるので、灰色の空き車まで走って乗り直す。</p>
   </div>
@@ -80,15 +82,30 @@
   </div>
 </section>
 
+<section id="prep" hidden>
+  <div class="ptop">
+    <div id="pcount"><b>10</b><span data-en="sec to start">秒で出発</span></div>
+    <div class="pttl"><p id="pRole">運転席</p><h2 id="pHead">車をえらぶ</h2></div>
+  </div>
+  <div id="pcards"></div>
+  <div class="pfoot">
+    <div id="pmate"><span class="lab" data-en="PARTNER (CPU)">相棒（CPU）</span><b id="pmName"></b><em id="pmPick"></em></div>
+    <label class="pname"><span data-en="NAME">なまえ</span><input id="pName" maxlength="8" autocomplete="off" spellcheck="false" placeholder="あなた"></label>
+  </div>
+  <p class="pnote" data-en="Pick nothing and it is random.">えらばないと、ランダムで決まる</p>
+</section>
+
 <section id="hud" hidden>
   <div id="timer"><b id="tm">3:30</b></div>
   <div id="role"><span id="roleName">運転</span><i id="swapBar"><u></u></i></div>
   <ul id="board"></ul>
+  <div id="partner"><i></i><b id="ptName"></b><span id="ptInfo"></span></div>
   <canvas id="radar" width="184" height="184"></canvas>
   <ul id="feed"></ul>
   <div id="msg"></div>
   <div id="cross" hidden><i></i></div>
   <div id="marks"></div>
+  <div id="wslots"></div>
   <div id="gauge">
     <div class="g hp"><b>HP</b><i><u id="hpBar"></u></i></div>
     <div class="g bst"><b>BOOST</b><i><u id="bstBar"></u></i></div>
@@ -100,12 +117,14 @@
   <div id="tc">
     <button id="bL" class="rb arrow" aria-label="左" data-role="drive"><svg viewBox="0 0 48 48"><path d="M30 10L14 24l16 14"/></svg></button>
     <button id="bR" class="rb arrow" aria-label="右" data-role="drive"><svg viewBox="0 0 48 48"><path d="M18 10l16 14-16 14"/></svg></button>
-    <button id="bGas" class="rb gas" aria-label="アクセル" data-role="drive"><svg viewBox="0 0 48 64"><rect x="8" y="4" width="32" height="56" rx="8"/><path d="M15 16h18M15 26h18M15 36h18M15 46h18"/></svg></button>
-    <button id="bGear" class="rb gear" aria-label="前進とバック" data-role="drive"><svg viewBox="0 0 40 64"><rect class="slot" x="15" y="6" width="10" height="52" rx="5"/><text class="d" x="33" y="16">D</text><text class="r" x="33" y="62">R</text><circle class="knob" cx="20" cy="14" r="9"/></svg></button>
+    <button id="bGas" class="rb gas" aria-label="アクセル" data-role="drive"><svg viewBox="0 0 48 64"><rect x="8" y="4" width="32" height="56" rx="8"/><path d="M15 16h18M15 26h18M15 36h18M15 46h18"/></svg><span>アクセル</span></button>
+    <button id="bBack" class="rb back" aria-label="バック" data-role="drive"><svg viewBox="0 0 48 48"><path d="M30 12H18a8 8 0 000 16h12M14 20l-6 8 6 8"/><path d="M26 40h14" /></svg><span>バック</span></button>
+    <button id="bHb" class="rb hb" aria-label="サイドブレーキ" data-role="drive"><svg viewBox="0 0 48 48"><path d="M10 34c8-4 20-4 28 0M14 24c6-3 14-3 20 0"/><circle cx="24" cy="14" r="4"/></svg><span>ドリフト</span></button>
     <button id="bBoost" class="rb boost" aria-label="ブースト" data-role="drive"><svg viewBox="0 0 48 48"><path d="M27 4L10 27h11l-3 17 20-25H26z"/></svg></button>
     <button id="bFire" class="rb fire" aria-label="撃つ" data-role="shoot"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="14"/><path d="M24 4v10M24 34v10M4 24h10M34 24h10"/><circle cx="24" cy="24" r="3.5" class="f"/></svg></button>
     <button id="bReload" class="rb reload" aria-label="リロード" data-role="shoot"><svg viewBox="0 0 48 48"><path d="M38 24a14 14 0 11-5-10.6"/><path d="M36 5v10H26" /></svg></button>
     <button id="bItem" class="rb item" aria-label="アイテム" data-role="both"><svg viewBox="0 0 48 48"><rect x="9" y="17" width="30" height="24" rx="3"/><path d="M9 25h30M24 17v24M24 17c-4-9-12-6-9 0M24 17c4-9 12-6 9 0"/></svg></button>
+    <button id="bWswap" class="rb wswap" aria-label="銃の持ち替え" data-role="shoot"><svg viewBox="0 0 48 48"><path d="M10 18h22l-5-5M38 30H16l5 5"/></svg><span>持ち替え</span></button>
     <button id="bSwap" class="rb swap" aria-label="役を交代" data-role="both"><svg viewBox="0 0 48 48"><path d="M8 18h28l-7-7M40 30H12l7 7"/></svg></button>
     <button id="bMute" class="rb mute" aria-label="音"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9z"/><path class="on" d="M16 8a5 5 0 010 8M19 5a9 9 0 010 14"/></svg></button>
   </div>

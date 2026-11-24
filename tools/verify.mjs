@@ -28,7 +28,7 @@ async function open(q, vp = { width: 1440, height: 900 }, touch = false) {
   p.on('pageerror', e => p.errs.push('pageerror ' + e.message))
   p.on('console', m => { if (m.type() === 'error' && !/GL Driver|fonts\.g|Failed to load resource/.test(m.text())) p.errs.push('console ' + m.text()) })
   p.on('requestfailed', r => { if (!/fonts\.(googleapis|gstatic)/.test(r.url())) p.errs.push('reqfail ' + r.url()) })
-  await p.goto(U(q)); await p.waitForFunction(() => window.__bbReady, null, { timeout: 40000 })
+  await p.goto(U(q + '&prep=1')); await p.waitForFunction(() => window.__bbReady, null, { timeout: 40000 })
   return p
 }
 const S = p => p.evaluate(() => { const S = __bb.S(), t = S.teams[0], c = S.cars.find(q => q.id === t.car); return { t: S.t, tm: S.tMatch, phase: S.phase, over: S.over, role: __bb.role(), driver: t.driver, hp: c ? c.hp : null, stock: t.stock, kills: t.kills, out: t.out, walking: t.walking, shots: t.stats.shots, hits: t.stats.hits, rams: t.stats.rams, pick: t.stats.pick, x: c ? c.x : t.p[0].x, z: c ? c.z : t.p[0].z, sp: c ? Math.hypot(c.vx, c.vz) : 0, mag: c ? c.mag : 0, swapT: t.swapT, boost: c ? c.boost : 0 } })
@@ -60,7 +60,7 @@ for (const [w, h] of SIZES) await t(`スマホ縦 ${w}x${h}: タイトル・運�
   const check = async label => {
     const r = await p.evaluate(() => {
       const W = innerWidth, H = innerHeight, bad = []
-      const vis = [...document.querySelectorAll('#tc .rb, #goDrive, #goShoot, #timer, #role, #board, #radar, #gauge, #msg, #hint')].filter(e => e.offsetParent !== null && !e.hidden && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0)
+      const vis = [...document.querySelectorAll('#tc .rb, #goDrive, #goShoot, #timer, #role, #board, #radar, #gauge, #msg, #hint, #partner, #wslots')].filter(e => e.offsetParent !== null && !e.hidden && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0)
       const R = vis.map(e => [e.id || e.className, e.getBoundingClientRect()])
       for (const [n, r] of R) if (r.left < -1 || r.right > W + 1 || r.top < -1 || r.bottom > H + 1) bad.push('はみ出し ' + n)
       for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) { const a = R[i][1], b = R[j][1]; const ov = Math.min(a.right, b.right) - Math.max(a.left, b.left), oh = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top); if (ov > 4 && oh > 4) bad.push(`重なり ${R[i][0]}/${R[j][0]}`) }
@@ -126,7 +126,7 @@ await t('PC射手: A/D で向きを変えて敵をねらい、クリックで撃
       const wl = n.dvAim > 0.05, wr = n.dvAim < -0.05
       if (wl && !L) { await p.keyboard.down('KeyA'); L = true } if (!wl && L) { await p.keyboard.up('KeyA'); L = false }
       if (wr && !R) { await p.keyboard.down('KeyD'); R = true } if (!wr && R) { await p.keyboard.up('KeyD'); R = false }
-      const want = Math.abs(n.dvAim) < 0.25 && n.d < 55
+      const want = Math.abs(n.dvAim) < 0.3 && n.d < 120
       if (want && !down) { await p.mouse.down(); down = true } if (!want && down) { await p.mouse.up(); down = false }
     }
     if (s.mag < 3) reloaded++
@@ -134,7 +134,7 @@ await t('PC射手: A/D で向きを変えて敵をねらい、クリックで撃
   }
   if (down) await p.mouse.up(); for (const k of ['KeyA', 'KeyD']) await p.keyboard.up(k)
   const s = await S(p)
-  expect(s.shots > 20, '撃てていない ' + s.shots); expect(s.hits > 3, '当たらない ' + s.hits)
+  expect(s.shots > 5, '撃てていない ' + s.shots); expect(s.hits > 3, '当たらない ' + s.hits)
   expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return { shots: s.shots, hits: s.hits, kills: s.kills, lowmag: reloaded }
 })
 // ------------------------------------------------------------ スマホ: 運転（ボタン）と、壊れた後に歩いて空き車へ

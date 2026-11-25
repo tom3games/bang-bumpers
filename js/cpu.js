@@ -1,7 +1,7 @@
 // CPU の頭。運転役・射手役・歩きを別々に作り、makeInputs で人の入力と混ぜて チームごとの入力 にする。
 // 状態(S)は読むだけ。サーバーに移しても同じ関数がそのまま動く。
-import { H, WORLD, POLES, pushOutCircle, lineClear, clamp } from './arena.js?v=6'
-import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=6'
+import { H, WORLD, POLES, pushOutCircle, lineClear, clamp } from './arena.js?v=9'
+import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=9'
 
 const MEM = new WeakMap()
 const mem = t => { let m = MEM.get(t); if (!m) { m = { stuckT: 0, revT: 0, lx: 0, lz: 0, lt: 0, tgt: -1, tgtT: 0, gtgt: -1, gT: 0, noise: 0, burst: 0, rest: 0.5, aim: null, side: 1, seed: t.id * 7.13 + 1, walkStuck: 0, wlx: 0, wlz: 0, wt: 0, wside: 1, dropT: 3 + t.id }; MEM.set(t, m) } return m }
@@ -212,7 +212,7 @@ export function cpuWalk(S, t, dt) {
     ang += m.wside * Math.min(0.9, Math.max(0, (22 - bd) / 22) * 0.9)  // 近いほど横へ振って、まっすぐ轢かれない
   } else {
     let bp = null, pd = 1e9
-    for (const o of POLES) { if (o.kind !== 'pillar') continue; const d = Math.hypot(o.x - p0.x, o.z - p0.z); if (d < pd) { pd = d; bp = o } }
+    for (const o of POLES) { if (o.kind !== 'pillar' || o.top - o.base < 3) continue; const d = Math.hypot(o.x - p0.x, o.z - p0.z); if (d < pd) { pd = d; bp = o } }
     ang = bp && pd > 3.5 ? Math.atan2(bp.x - p0.x, bp.z - p0.z) : p0.yaw + Math.sin(S.t * 1.3 + m.seed) * 0.8
   }
   if (m.walkStuck > 0) { m.walkStuck -= dt; ang += 1.5 * m.wside }

@@ -1,17 +1,17 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 import * as THREE from 'three'
-import { WORLD, RAMPS, POLES, BOXES, H, solidAtPoint } from './arena.js?v=6'
-import * as TX from './textures.js?v=6'
-import { rbox, Baker } from './models.js?v=6'
-import { buildCar } from './cars.js?v=6'
-import { crateMeshes, decalPlace } from './crates.js?v=6'
-import { makePerson, animate as animPerson } from './people.js?v=6'
-import { Particles, Splats, Debris, Rings } from './fx.js?v=6'
+import { WORLD, RAMPS, POLES, BOXES, H, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=9'
+import * as TX from './textures.js?v=9'
+import { rbox, Baker } from './models.js?v=9'
+import { buildCar } from './cars.js?v=9'
+import { crateMeshes, decalPlace } from './crates.js?v=9'
+import { makePerson, animate as animPerson } from './people.js?v=9'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=9'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=6'
+import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=9'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
@@ -141,32 +141,11 @@ export class Stage {
       }
     }
     addB(bRamp, rampMat); addB(bEdge, edgeM, false)
-    // 柱・タイヤの山。柱は型枠コンクリート: 土台・継ぎ目の輪・黄黒の帯・ボルト・擦り傷・頭の鉄筋
-    const poleM = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 })
-    const pillarT = TX.pillarTexture(aniso), pillarM = new THREE.MeshStandardMaterial({ map: pillarT, bumpMap: pillarT, bumpScale: 1.4, roughness: 0.92 })
-    const bPole = new Baker(), bShaft = new Baker(), bBand = new Baker(), bTire = new Baker(), bSteel = new Baker(), bTop = new Baker()
-    const warn = TX.hazardTexture('#c9a233', aniso), warnR = TX.hazardTexture('#b5352c', aniso)
-    const scuffM = new THREE.MeshStandardMaterial({ map: TX.scuffTexture(), transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
-    const bScuff = new Baker(), bBandR = new Baker()
-    for (const o of POLES) {
-      if (o.kind === 'tires') { for (let i = 0; i < 4; i++) bTire.add(new THREE.TorusGeometry(0.66, 0.27, 8, 14), o.x + (i % 2) * 0.05, o.base + 0.27 + i * 0.4, o.z, 0x131314, Math.PI / 2); continue }
-      const r = o.r, h = o.h, y0 = o.base
-      bPole.add(uvs(new THREE.CylinderGeometry(r + 0.3, r + 0.4, 0.55, 24), 5, 1), o.x, y0 + 0.275, o.z)                         // 土台
-      bPole.add(uvs(new THREE.CylinderGeometry(r + 0.2, r + 0.3, 0.2, 24), 5, 0.4), o.x, y0 + 0.65, o.z)
-      bShaft.add(uvs(new THREE.CylinderGeometry(r, r * 1.03, h - 0.7, 28), 2, (h - 0.7) / 2.75), o.x, y0 + 0.75 + (h - 0.7) / 2, o.z)  // 柱の本体
-      bBand.add(uvs(new THREE.CylinderGeometry(r + 0.04, r + 0.04, 1.5, 28, 1, true), Math.max(3, Math.round(r * 4)), 1), o.x, y0 + 1.6, o.z)   // 黄黒の注意の帯
-      bBandR.add(uvs(new THREE.CylinderGeometry(r + 0.04, r + 0.04, 0.8, 28, 1, true), Math.max(3, Math.round(r * 4)), 0.5), o.x, y0 + h - 1.6, o.z)   // 頭の近くの赤い帯
-      bScuff.add(uvs(new THREE.CylinderGeometry(r + 0.055, r + 0.055, 1.8, 28, 1, true), 2, 1), o.x, y0 + 1.7, o.z)
-      for (let k = 1; k <= 3; k++) bSteel.add(new THREE.CylinderGeometry(r + 0.025, r + 0.025, 0.09, 28), o.x, y0 + 0.75 + k * (h - 0.7) / 4, o.z, 0x5a5852)     // 打ち継ぎの溝（暗い輪）
-      bSteel.add(new THREE.CylinderGeometry(r + 0.34, r + 0.34, 0.05, 24), o.x, y0 + 0.56, o.z, 0x36383b)                           // ベースプレート
-      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + 0.2; bSteel.add(new THREE.CylinderGeometry(0.07, 0.07, 0.17, 6), o.x + Math.sin(a) * (r + 0.24), y0 + 0.66, o.z + Math.cos(a) * (r + 0.24), 0x8d9094); bSteel.add(new THREE.CylinderGeometry(0.11, 0.11, 0.06, 6), o.x + Math.sin(a) * (r + 0.24), y0 + 0.72, o.z + Math.cos(a) * (r + 0.24), 0x6c6f73) }   // アンカーボルトとナット
-      bTop.add(uvs(new THREE.CylinderGeometry(r + 0.1, r + 0.2, 0.55, 24), 5, 1), o.x, y0 + h - 0.275, o.z)                      // 頭の笠
-      for (let k = 0; k < 9; k++) { const a = k / 9 * 6.283 + 0.4, d = (r - 0.2) * (0.45 + 0.5 * ((k * 7) % 5) / 5); bSteel.add(new THREE.CylinderGeometry(0.03, 0.03, 0.9 + (k % 3) * 0.3, 5), o.x + Math.sin(a) * d, y0 + h + 0.35, o.z + Math.cos(a) * d, 0x7a4a2a, 0.1 * Math.sin(a * 3), 0, 0.1 * Math.cos(a * 2)) }   // 錆びた鉄筋
-    }
-    addB(bPole, poleM); addB(bTop, poleM); { const m = bShaft.mesh(pillarM, true); if (m) { m.receiveShadow = true; S.add(m) } }
-    addB(bBand, new THREE.MeshStandardMaterial({ map: warn, roughness: 0.75 }), false); addB(bBandR, new THREE.MeshStandardMaterial({ map: warnR, roughness: 0.75 }), false)
-    { const m = bScuff.mesh(scuffM, false); if (m) { m.renderOrder = 1; S.add(m) } }
-    addB(bSteel, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.7 })); addB(bTire, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }))
+    // タイヤの山（柱は崩れるので buildPillars で作り直せる別の入れ物）
+    const bTire = new Baker()
+    for (const o of POLES) if (o.kind === 'tires') for (let i = 0; i < 4; i++) bTire.add(new THREE.TorusGeometry(0.66, 0.27, 8, 14), o.x + (i % 2) * 0.05, o.base + 0.27 + i * 0.4, o.z, 0x131314, Math.PI / 2)
+    addB(bTire, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }))
+    this.pillarGroup = new THREE.Group(); S.add(this.pillarGroup); this.buildPillars(null)
     // バリア
     const bBr = new Baker(), bBh = new Baker()
     for (const o of BOXES) {
@@ -177,6 +156,106 @@ export class Stage {
       bBh.add(uvs(new THREE.BoxGeometry(o.w + 0.02, 0.2, o.d + 0.02), Math.max(o.w, o.d) / 1.1 * 0.5, 1), o.x, o.base + o.h - 0.22, o.z)
     }
     addB(bBr, new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 })); addB(bBh, edgeM, false)
+  }
+  // ---------------------------------------------------------------- 柱（型枠コンクリート）。段階が変わった時だけ作り直す
+  // stage 0 無傷 / 1 ひび / 2 上が欠けた（斜めのギザギザ）/ 3 折れた株 / 4 瓦礫の山（低い。車は乗り越える）
+  buildPillars(S) {
+    const aniso = this.low ? 4 : 8, stages = PILLARS.map((o, i) => S && S.pillars[i] ? S.pillars[i].stage : 0)
+    this.pillarSig = stages.join('')
+    const G = this.pillarGroup
+    for (const m of [...G.children]) { G.remove(m); if (m.geometry) m.geometry.dispose() }
+    if (!this.pm) {
+      const pillarT = TX.pillarTexture(aniso), crackT = TX.crackTexture()
+      this.pm = {
+        pole: new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 }),
+        shaft: new THREE.MeshStandardMaterial({ map: pillarT, bumpMap: pillarT, bumpScale: 1.4, roughness: 0.92 }),
+        warn: new THREE.MeshStandardMaterial({ map: TX.hazardTexture('#c9a233', aniso), roughness: 0.75 }), warnR: new THREE.MeshStandardMaterial({ map: TX.hazardTexture('#b5352c', aniso), roughness: 0.75 }),
+        scuff: new THREE.MeshStandardMaterial({ map: TX.scuffTexture(), transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+        crack: new THREE.MeshStandardMaterial({ map: crackT, transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
+        steel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.7 }),
+        rust: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.4 }),
+        chunk: new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), color: 0x77746d, roughness: 0.95 }),
+        dust: new THREE.MeshStandardMaterial({ map: TX.dustPatchTexture(), color: 0x6c6962, opacity: 0.8, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      }
+      this.chunkGeo = new THREE.IcosahedronGeometry(0.5, 0)
+    }
+    const M = this.pm, uvs = (geo, su, sv) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv); return geo }
+    const bPole = new Baker(), bShaft = new Baker(), bBand = new Baker(), bBandR = new Baker(), bSteel = new Baker(), bTop = new Baker(), bScuff = new Baker(), bCrack = new Baker(), bChunk = new Baker(), bRust = new Baker(), bDust = new Baker()
+    const mul = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 }
+    // 上が斜めにちぎれた柱: 上の縁の高さを角度の関数で下げる（同じ角度なら側面とふたで同じだけ下がる）
+    const jagged = (r, len, ph, depth) => {
+      const g = new THREE.CylinderGeometry(r * 0.99, r * 1.03, len, 28, 1, false), pa = g.attributes.position
+      const off = a => depth * (0.55 + 0.45 * Math.cos(a - ph)) + depth * 0.28 * Math.sin(a * 3 + ph * 2) * Math.sin(a * 5 + 1.3)
+      for (let i = 0; i < pa.count; i++) { if (pa.getY(i) > 0) { const x = pa.getX(i), z = pa.getZ(i); pa.setY(i, pa.getY(i) - (Math.hypot(x, z) < 0.01 ? depth * 0.55 : off(Math.atan2(x, z)))) } }
+      g.computeVertexNormals(); return g
+    }
+    for (const o of PILLARS) {
+      const st = stages[o.pid], R = mul(o.pid * 977 + st * 131 + 5), r = o.r, y0 = o.base, H0 = o.h
+      const hh = st < 2 ? H0 : PILLAR_H[st]           // 柱の頭の高さ
+      if (st < 4) {
+        bPole.add(uvs(new THREE.CylinderGeometry(r + 0.3, r + 0.4, 0.55, 24), 5, 1), o.x, y0 + 0.275, o.z)
+        bPole.add(uvs(new THREE.CylinderGeometry(r + 0.2, r + 0.3, 0.2, 24), 5, 0.4), o.x, y0 + 0.65, o.z)
+        const len = hh - 0.75, ph = R() * 6.283
+        if (st < 2) bShaft.add(uvs(new THREE.CylinderGeometry(r, r * 1.03, H0 - 0.7, 28), 2, (H0 - 0.7) / 2.75), o.x, y0 + 0.75 + (H0 - 0.7) / 2, o.z)
+        else bShaft.add(uvs(jagged(r, len, ph, st === 2 ? 1.5 : 0.9), 2, len / 2.75), o.x, y0 + 0.75 + len / 2, o.z)
+        bBand.add(uvs(new THREE.CylinderGeometry(r + 0.04, r + 0.04, 1.5, 28, 1, true), Math.max(3, Math.round(r * 4)), 1), o.x, y0 + 1.6, o.z)
+        if (st < 2) bBandR.add(uvs(new THREE.CylinderGeometry(r + 0.04, r + 0.04, 0.8, 28, 1, true), Math.max(3, Math.round(r * 4)), 0.5), o.x, y0 + H0 - 1.6, o.z)
+        bScuff.add(uvs(new THREE.CylinderGeometry(r + 0.055, r + 0.055, 1.8, 28, 1, true), 2, 1), o.x, y0 + 1.7, o.z)
+        for (let k = 1; k <= 3; k++) { const yy = 0.75 + k * (H0 - 0.7) / 4; if (yy < hh - 0.5) bSteel.add(new THREE.CylinderGeometry(r + 0.025, r + 0.025, 0.09, 28), o.x, y0 + yy, o.z, 0x5a5852) }
+        bSteel.add(new THREE.CylinderGeometry(r + 0.34, r + 0.34, 0.05, 24), o.x, y0 + 0.56, o.z, 0x36383b)
+        for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + 0.2; bSteel.add(new THREE.CylinderGeometry(0.07, 0.07, 0.17, 6), o.x + Math.sin(a) * (r + 0.24), y0 + 0.66, o.z + Math.cos(a) * (r + 0.24), 0x8d9094); bSteel.add(new THREE.CylinderGeometry(0.11, 0.11, 0.06, 6), o.x + Math.sin(a) * (r + 0.24), y0 + 0.72, o.z + Math.cos(a) * (r + 0.24), 0x6c6f73) }
+        if (st < 2) {
+          bTop.add(uvs(new THREE.CylinderGeometry(r + 0.1, r + 0.2, 0.55, 24), 5, 1), o.x, y0 + H0 - 0.275, o.z)
+          for (let k = 0; k < 9; k++) { const a = k / 9 * 6.283 + 0.4, d = (r - 0.2) * (0.45 + 0.5 * ((k * 7) % 5) / 5); bSteel.add(new THREE.CylinderGeometry(0.03, 0.03, 0.9 + (k % 3) * 0.3, 5), o.x + Math.sin(a) * d, y0 + H0 + 0.35, o.z + Math.cos(a) * d, 0x7a4a2a, 0.1 * Math.sin(a * 3), 0, 0.1 * Math.cos(a * 2)) }
+        } else {
+          // ちぎれた断面から曲がった鉄筋が飛び出す
+          for (let k = 0; k < 8; k++) { const a = R() * 6.283, d = (r - 0.3) * (0.3 + R() * 0.65), L = 0.7 + R() * 1.5, tx = (R() - 0.5) * 0.9, tz = (R() - 0.5) * 0.9; bRust.add(new THREE.CylinderGeometry(0.035, 0.035, L, 5), o.x + Math.sin(a) * d, y0 + hh - 0.5 + L / 2 - (st === 2 ? 0.6 : 0.2), o.z + Math.cos(a) * d, 0x7a4a2a, tx, 0, tz) }
+        }
+        if (st >= 1) bCrack.add(uvs(new THREE.CylinderGeometry(r + 0.05, r + 0.05, Math.min(len, st === 1 ? H0 - 2 : len) - 0.4, 28, 1, true), 1, Math.min(len, 9) / 5), o.x, y0 + 0.95 + (Math.min(len, st === 1 ? H0 - 2 : len) - 0.4) / 2, o.z)
+      } else {
+        bPole.add(new THREE.CylinderGeometry(r + 0.34, r + 0.4, 0.12, 24), o.x, y0 + 0.06, o.z)     // 土台の跡（平ら）
+        for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283 + 0.2; bSteel.add(new THREE.CylinderGeometry(0.07, 0.07, 0.17, 6), o.x + Math.sin(a) * (r + 0.24), y0 + 0.1, o.z + Math.cos(a) * (r + 0.24), 0x8d9094) }
+      }
+      // 足もとに散った塊。段階が進むほど多く、低い（0.5m 以下）
+      const nChunk = [0, 0, 6, 11, 20][st], mound = st === 4
+      for (let k = 0; k < nChunk; k++) {
+        const a = R() * 6.283, d = mound ? R() * R() * (r + 1.2) + 0.2 : r + 0.4 + R() * (1.5 + st), sz = mound ? 0.35 + R() * 0.55 : 0.18 + R() * 0.3
+        const sy = mound ? Math.min(0.5, sz * (0.45 + R() * 0.35)) : Math.min(0.4, sz * 0.7)
+        bChunk.add(this.chunkGeo, o.x + Math.sin(a) * d, y0 + sy * 0.35, o.z + Math.cos(a) * d, null, R() * 3, R() * 6.28, R() * 3, sz, sy * 2, sz * (0.7 + R() * 0.5))
+      }
+      if (st === 4) for (let k = 0; k < 6; k++) { const a = R() * 6.283, d = R() * 1.6, L = 0.6 + R() * 1.1; bRust.add(new THREE.CylinderGeometry(0.03, 0.03, L, 5), o.x + Math.sin(a) * d, y0 + 0.3, o.z + Math.cos(a) * d, 0x7a4a2a, (R() - 0.5) * 2.2, R() * 3, (R() - 0.5) * 2.2) }
+      if (st >= 2) { const g = new THREE.CircleGeometry(r + 1.2 + st * 0.85, 28); g.rotateX(-Math.PI / 2); bDust.add(g, o.x, y0 + 0.03, o.z) }
+    }
+    const add = (bk, mat, cast = true, recv = true, ro = 0) => { const m = bk.mesh(mat, cast); if (!m) return; m.receiveShadow = recv; if (ro) m.renderOrder = ro; G.add(m) }
+    add(bPole, M.pole); add(bTop, M.pole); add(bShaft, M.shaft); add(bBand, M.warn, true, false); add(bBandR, M.warnR, true, false); add(bScuff, M.scuff, false, true, 1); add(bCrack, M.crack, false, true, 1)
+    add(bSteel, M.steel); add(bRust, M.rust); add(bChunk, M.chunk); add(bDust, M.dust, false, true, 1)
+  }
+  // 柱が崩れた瞬間: 土煙・落ちる塊・低い音。from→stage でちぎれた分の高さに土煙を出す
+  pillarCollapse(e) {
+    const sm = this.pSmoke, rnd = Math.random, st = e.stage, hi = PILLAR_H[e.from], lo = Math.max(0.4, PILLAR_H[st])
+    const big = st >= 2
+    if (st === 1) {
+      for (let i = 0; i < 6; i++) sm.emit(e.x + (rnd() - 0.5) * 1.6, e.y + 2 + rnd() * 5, e.z + (rnd() - 0.5) * 1.6, (rnd() - 0.5) * 0.8, 0.3, (rnd() - 0.5) * 0.8, 1.6, 0.6, 1.8, 0xb9b4a8, 0xa39e92, 0.32, 0, 1.4)
+      this.snd('thud', { vol: this.vol(e.x, e.z, 0.5, 40), rate: 0.7 }); this.snd('clink', { vol: this.vol(e.x, e.z, 0.35, 34), rate: 0.5 }); this.addShake(e.x, e.z, 0.08)
+      return
+    }
+    const nd = this.low ? 16 : 34
+    for (let i = 0; i < nd; i++) {
+      const a = rnd() * 6.283, u = 1 + rnd() * (st === 4 ? 4.5 : 3.2), y = e.y + lo + rnd() * (Math.min(hi, lo + 6) - lo)
+      sm.emit(e.x + Math.sin(a) * e.r * 0.8, y, e.z + Math.cos(a) * e.r * 0.8, Math.sin(a) * u, 0.3 + rnd() * 1.1, Math.cos(a) * u, 2.4 + rnd() * 1.6, 1.0 + rnd() * 0.8, 3.8 + rnd() * 2.4, rnd() < 0.5 ? 0xa39e92 : 0x948f84, 0x7d796f, 0.34, 0, 1.6)
+    }
+    // 落ちる塊（数と寿命は Debris が絞る）。大きいのと小さいのを混ぜる
+    const nb = this.low ? 5 : 9
+    for (let i = 0; i < nb; i++) {
+      const m = new THREE.Mesh(this.chunkGeo, this.pm.chunk); const k = i < 3 ? 1.0 + rnd() * 0.5 : 0.2 + rnd() * 0.35
+      m.scale.set(k * (0.8 + rnd() * 0.5), k * (0.6 + rnd() * 0.5), k * (0.8 + rnd() * 0.5)); m.position.set(e.x + (rnd() - 0.5) * 2, e.y + lo + rnd() * Math.min(5, hi - lo), e.z + (rnd() - 0.5) * 2); m.castShadow = i < 3
+      m.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3); this.scene.add(m)
+      const a = rnd() * 6.283, u = 2 + rnd() * 5; this.debris.fling(m, new THREE.Vector3(Math.sin(a) * u, 1 + rnd() * 3, Math.cos(a) * u), 5)
+    }
+    const v = 0.55 + (st - 2) * 0.1
+    this.snd('crash', { vol: this.vol(e.x, e.z, 1, 55), rate: v }); this.snd('debris', { vol: this.vol(e.x, e.z, 0.9, 50), rate: 0.6 })
+    this.snd('boom', { vol: this.vol(e.x, e.z, big ? 0.45 : 0.3, 60), rate: 0.5 }); this.snd('thud', { vol: this.vol(e.x, e.z, 0.8, 50), rate: 0.55 })
+    this.addShake(e.x, e.z, 0.35 + (st - 2) * 0.12)
   }
   // ---------------------------------------------------------------- 動く物の入れ物
   buildDynamic() {
@@ -284,6 +363,7 @@ export class Stage {
   // ---------------------------------------------------------------- 毎フレーム
   sync(S, alpha, dt, ctx) {
     this.time += dt
+    if (S.pillars) { const sig = S.pillars.map(p => p.stage).join(''); if (sig !== this.pillarSig) this.buildPillars(S) }
     this.sky.position.copy(this.cam.position)
     if (this.flashLight.intensity > 1) this.flashLight.intensity *= Math.exp(-dt * 7); else this.flashLight.intensity = 0
     const seen = new Set()
@@ -475,6 +555,7 @@ export class Stage {
           if (e.w !== 'confetti') { this.splats.add(e.x, e.y, e.z, nx, ny, nz, col, e.what === 'ground' ? 1.1 : 0.9); this.snd('plop', { vol: this.vol(e.x, e.z, 0.28, 24), rate: 1.2 }) }
           else this.confettiBurst(e.x, e.y, e.z, 5, 4)
           for (let i = 0; i < 4; i++) fi.emit(e.x, e.y, e.z, nx * 3 + (rnd() - 0.5) * 4, ny * 3 + rnd() * 3, nz * 3 + (rnd() - 0.5) * 4, 0.35, 0.35, 0.1, col, col, 1, 12, 0.5)
+          if (e.pid != null) for (let i = 0; i < 2; i++) sm.emit(e.x, e.y, e.z, nx * 1.2 + (rnd() - 0.5), 0.4 + rnd() * 0.6, nz * 1.2 + (rnd() - 0.5), 1.0, 0.3, 1.1, 0xb9b4a8, 0xa39e92, 0.3, 0, 1.4)
         }
         break
       }
@@ -491,6 +572,7 @@ export class Stage {
       case 'wall': { const p = Math.min(1, e.power / 16); for (let i = 0; i < 4 + p * 10; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 8, rnd() * 5, (rnd() - 0.5) * 8, 0.35, 0.3, 0.05, 0xfff0b0, 0xff7a20, 1, 20, 0.3); this.snd('clink', { vol: this.vol(e.x, e.z, 0.3 + p * 0.5, 28), rate: 0.7 + rnd() * 0.3 }); this.addShake(e.x, e.z, 0.05 + p * 0.25); break }
       case 'explode': this.bigExplosion(e, S); break
       case 'boom': this.firework(e); break
+      case 'pillar': this.pillarCollapse(e); break
       case 'land': { const lv = this.cars.get(e.id); if (lv) lv.hvV -= Math.min(5, e.power * 0.5); if (lv) lv.psV += 0.8 * (Math.random() - 0.3)
         const p = Math.min(1, e.power / 16); for (let i = 0; i < 8 + p * 12; i++) { const a = rnd() * 6.28; sm.emit(e.x + Math.sin(a), e.y + 0.2, e.z + Math.cos(a), Math.sin(a) * (3 + p * 3), 0.6, Math.cos(a) * (3 + p * 3), 0.9, 0.8, 2.6, 0xcbc4b6, 0xcbc4b6, 0.5, 0, 2) } if (e.power > 7) { this.snd('thud', { vol: this.vol(e.x, e.z, 0.4 + p * 0.5, 30), rate: 0.8 }); this.addShake(e.x, e.z, 0.1 + p * 0.3) } break }
       case 'pickup': { const c = PICKC[e.type] || 0xffffff; for (let i = 0; i < 18; i++) { const a = rnd() * 6.28, u = 2 + rnd() * 4; fi.emit(e.x, e.y + 1.2, e.z, Math.sin(a) * u, 3 + rnd() * 5, Math.cos(a) * u, 0.9, 0.5, 0.1, c, 0xffffff, 1, 8, 0.6) } this.rings.ring(e.x, e.y, e.z, 3, c, 0.5); this.snd('bell', { vol: this.vol(e.x, e.z, 0.5, 30), rate: 1.2 }); break }

@@ -32,6 +32,12 @@ export function H(x, z) {
   return h
 }
 for (const o of POLES) { o.base = H(o.x, o.z); o.top = o.base + o.h }
+// ---- 柱の崩れ。状態は sim の S.pillars（hp・stage）が持ち、applyPillars で当たりの高さ（o.top）へ写す
+// stage 0 無傷 / 1 ひび / 2 上が欠けた / 3 折れた株 / 4 瓦礫（低く、車は乗り越えられる＝当たり判定なし）
+export const PILLARS = POLES.filter(o => o.kind === 'pillar'); PILLARS.forEach((o, i) => { o.pid = i })
+export const PILLAR_H = [11, 11, 7, 2.9, 0.05]
+export const pillarStageOf = hp => hp > 70 ? 0 : hp > 40 ? 1 : hp > 15 ? 2 : hp > 0 ? 3 : 4
+export function applyPillars(list) { for (let i = 0; i < PILLARS.length; i++) { const o = PILLARS[i], p = list && list[i]; o.top = o.base + (p ? PILLAR_H[p.stage] : PILLAR_H[0]); o.stage = p ? p.stage : 0 } }
 for (const o of BOXES) { o.base = H(o.x, o.z); o.top = o.base + o.h }
 export const OBST = { poles: POLES, boxes: BOXES }
 
@@ -48,7 +54,7 @@ export function pushOutCircle(x, y, z, r, hgt, out) {
   for (const o of cellPoles[k]) {
     if (y > o.top - 0.2 || y + hgt < o.base + 0.1) continue
     const dx = x - o.x, dz = z - o.z, rr = r + o.r, d2 = dx * dx + dz * dz
-    if (d2 < rr * rr) { const d = Math.sqrt(d2) || 0.001; out.push([dx / d, dz / d, rr - d]); hit = true }
+    if (d2 < rr * rr) { const d = Math.sqrt(d2) || 0.001; out.push([dx / d, dz / d, rr - d, o]); hit = true }
   }
   for (const o of cellBoxes[k]) {
     if (y > o.top - 0.2 || y + hgt < o.base + 0.1) continue

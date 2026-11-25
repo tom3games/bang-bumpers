@@ -1,6 +1,6 @@
 // 絵はすべてその場で描く（画像ファイルなし）。廃工場のコンクリート・壁・木箱・鉄板
 import * as THREE from 'three'
-import { WORLD, RAMPS, TEAM_SPAWNS } from './arena.js?v=6'
+import { WORLD, RAMPS, TEAM_SPAWNS } from './arena.js?v=9'
 const HALF = WORLD
 
 function rnd(seed) { let a = seed; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
@@ -264,4 +264,37 @@ export function scuffTexture() {
   // 黄色いタイヤ跡
   for (let i = 0; i < 6; i++) { const x = R() * 512, y = 10 + R() * 100; g.fillStyle = `rgba(200,170,60,${0.15 + R() * 0.2})`; g.fillRect(x, y, 20 + R() * 60, 2 + R() * 3) }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t
+}
+
+// 柱のひび・欠け: 透明の地に、枝分かれする暗いひびと、はがれた跡（骨材が見える暗い面）と錆水
+export function crackTexture() {
+  const [c, g] = canvas(512, 512), R = rnd(131)
+  const crack = (x, y, ang, len, w, depth) => {
+    g.beginPath(); g.moveTo(x, y)
+    for (let s = 0, px = x, py = y; s < len; s += 7 + R() * 9) {
+      ang += (R() - 0.5) * 0.75; px += Math.cos(ang) * (7 + R() * 9); py += Math.sin(ang) * (7 + R() * 9); g.lineTo(px, py)
+      if (depth < 3 && R() < 0.1) { const sx = px, sy = py; g.stroke(); crack(sx, sy, ang + (R() < 0.5 ? 0.7 : -0.7), len * 0.45, w * 0.6, depth + 1); g.beginPath(); g.moveTo(sx, sy) }
+    }
+    g.stroke()
+  }
+  for (let i = 0; i < 7; i++) {
+    const x = R() * 512, y = R() * 512, a = (R() < 0.7 ? Math.PI / 2 : 0) + (R() - 0.5) * 1.2
+    g.strokeStyle = 'rgba(210,206,196,0.28)'; g.lineWidth = 3; g.lineJoin = 'round'; crack(x + 1.5, y + 1.5, a, 150 + R() * 200, 2, 0)
+    g.strokeStyle = 'rgba(18,16,14,0.88)'; g.lineWidth = 1.7; crack(x, y, a, 150 + R() * 200, 1.6, 0)
+  }
+  for (let i = 0; i < 5; i++) {   // はがれ: 骨材が見える暗い不ぞろいの面
+    const x = R() * 512, y = R() * 512, n = 6 + (R() * 4 | 0), rr = 10 + R() * 22; g.beginPath()
+    for (let k = 0; k < n; k++) { const a = k / n * 6.283, d = rr * (0.55 + R() * 0.7); g[k ? 'lineTo' : 'moveTo'](x + Math.cos(a) * d, y + Math.sin(a) * d * 1.3) }
+    g.closePath(); g.fillStyle = 'rgba(66,62,56,0.9)'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = 'rgba(205,202,192,0.5)'; g.stroke()
+    for (let k = 0; k < 14; k++) { g.fillStyle = `rgba(${130 + R() * 60 | 0},${126 + R() * 50 | 0},${116 + R() * 50 | 0},0.7)`; g.fillRect(x + (R() - 0.5) * rr, y + (R() - 0.5) * rr * 1.2, 1.5 + R() * 2.5, 1.5 + R() * 2.5) }
+  }
+  for (let i = 0; i < 4; i++) { const x = R() * 512, y = R() * 300, gr = g.createLinearGradient(0, y, 0, y + 160 + R() * 120); gr.addColorStop(0, 'rgba(150,84,40,0.4)'); gr.addColorStop(1, 'rgba(150,84,40,0)'); g.fillStyle = gr; g.fillRect(x, y, 5 + R() * 6, 280) }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t
+}
+// 崩れた柱のまわりに積もるコンクリートの粉（丸いぼかし）
+export function dustPatchTexture() {
+  const [c, g] = canvas(128, 128), R = rnd(133)
+  const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(176,172,162,0.8)'); gr.addColorStop(0.55, 'rgba(160,156,146,0.5)'); gr.addColorStop(1, 'rgba(150,146,136,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128)
+  for (let i = 0; i < 160; i++) { const a = R() * 6.283, d = R() * 50; g.fillStyle = `rgba(${90 + R() * 80 | 0},${88 + R() * 76 | 0},${82 + R() * 70 | 0},${0.1 + R() * 0.2})`; g.fillRect(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1 + R() * 3, 1 + R() * 3) }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
 }

@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=6'
+import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=9'
 
 export const DT = 1 / 60
 export const G = 24
@@ -75,6 +75,7 @@ export function createState(seed = 1, opts = {}) {
     const tm = { id: i, name: TEAM_NAMES[i], color: TEAM_COLORS[i], stock: STOCK, kills: 0, deaths: 0, out: false, outT: 0, car: car.id, driver: 0, iD: null, iG: null, ricT: 0, cd: 0, wSel: 0, ws: [], loadout: lo, swapReq: false, swapT: 0, footHp: 0, footLast: null, walking: false, respT: 0, footDead: false, stats: { shots: 0, hits: 0, rams: 0, pick: 0 }, p: [newPerson(i, 0), newPerson(i, 1)] }
     S.teams.push(tm); S.people.push(tm.p[0], tm.p[1]); setLoadout(S, tm, lo)
   }
+  S.pillars = PILLARS.map((o, i) => ({ i, hp: 100, stage: 0, wear: PK.wear[0] + S.rng() * (PK.wear[1] - PK.wear[0]) })); applyPillars(S.pillars)
   PICKUP_SPOTS.forEach((sp, i) => S.pickups.push({ x: sp.x, z: sp.z, type: pickType(S), t: 0, id: i }))
   S.pickups.push({ x: CENTER.x, z: CENTER.z, type: 'repair', t: CENTER_FIRST, id: PICKUP_SPOTS.length, center: true })
   return S
@@ -94,6 +95,7 @@ export function gunnerIdx(t) { return 1 - t.driver }
 // ---------------------------------------------------------------- 1 ステップ
 export function step(S, inputs, dt = DT) {
   S.t += dt
+  applyPillars(S.pillars)
   for (const c of S.cars) { c.px = c.x; c.py = c.y; c.pz = c.z; c.pyaw = c.yaw; c.pgun = c.gunYaw; c.ppitch = c.pitch; c.proll = c.roll }
   for (const p of S.people) { p.px = p.x; p.py = p.y; p.pz = p.z }
   // 準備（COUNTDOWN 秒）→ 3・2・1 → GO。3・2・1 のあいだはまだ動けない
@@ -119,6 +121,7 @@ export function step(S, inputs, dt = DT) {
   collideCars(S, dt)
   updateBullets(S, dt)
   updateMines(S, dt)
+  updatePillars(S, dt, live)
   updatePeople(S, inputs, dt, live)
   updatePickups(S, dt)
   cleanWrecks(S)
@@ -372,6 +375,7 @@ function stepBody(S, c, dt, inp, boosting) {
     for (const o of out) { c.x += o[0] * o[2] * 0.9; c.z += o[1] * o[2] * 0.9 }
     const vn = c.vx * best[0] + c.vz * best[1]
     if (vn < 0) {
+      for (const o of out) if (o[3] && o[3].pid != null && -vn > 3.5) hurtPillar(S, o[3].pid, (-vn - 3) * PK.ram * ((CAR_TYPES[c.type] || CAR_TYPES[0]).mass || 1), cx, cz)
       c.vx -= 1.5 * vn * best[0]; c.vz -= 1.5 * vn * best[1]; c.yawRate += (S.rng() - 0.5) * Math.min(2, -vn * 0.08)
       if (-vn > 4) { if (c.alive) hurt(S, c, Math.max(0, -vn - 6) * 1.4 * 0.6, null, cx, cz, 'obst'); ev(S, { k: 'wall', x: cx, y: c.y + 1, z: cz, power: -vn }) }
     }
@@ -478,8 +482,8 @@ function updateBullets(S, dt) {
     { const L = Math.hypot(b.x - b.px, b.z - b.pz, b.y - b.py), n = Math.ceil(L / 0.7); for (let k = 1; k < n && !hitK; k++) { const f = k / n, qx = b.px + (b.x - b.px) * f, qy = b.py + (b.y - b.py) * f, qz = b.pz + (b.z - b.pz) * f; if (solidAtPoint(qx, qy, qz) || qy < H(qx, qz)) { b.x = qx; b.y = qy; b.z = qz; break } } }
     if (b.x * b.x + b.z * b.z > WORLD * WORLD) { hitK = 'wall'; const rr = Math.hypot(b.x, b.z); b.x *= WORLD / rr; b.z *= WORLD / rr }
     else if (b.y < H(b.x, b.z)) { hitK = 'ground'; b.y = H(b.x, b.z) + 0.05 }
-    else if (solidAtPoint(b.x, b.y, b.z)) hitK = 'obst'
     else if (b.y > 30) hitK = 'sky'
+    else { const so = solidAtPoint(b.x, b.y, b.z); if (so) { hitK = 'obst'; hitObj = so } }
     // 反射（バネの鉄球・跳弾）
     if (hitK && hitK !== 'sky' && (b.bounces || 0) > 0) {
       b.bounces--
@@ -520,7 +524,8 @@ function updateBullets(S, dt) {
         } else if (hitK === 'person') {
           const t = S.teams[hitObj.team]; t.footHp -= dmg * 1.4; t.footLast = { team: b.team, t: S.t }; if (b.team >= 0) S.teams[b.team].stats.hits++
         } else if (hitK === 'turret') { hitObj.hp -= dmg * 1.5; if (b.team >= 0) S.teams[b.team].stats.hits++ }
-        ev(S, { k: 'bhit', w: b.type, what: hitK, team: b.team, x: b.x, y: b.y, z: b.z, vx: b.vx, vz: b.vz })
+        else if (hitK === 'obst' && hitObj && hitObj.pid != null) hurtPillar(S, hitObj.pid, dmg * PK.bullet, b.x, b.z)
+        ev(S, { k: 'bhit', w: b.type, what: hitK, pid: hitK === 'obst' && hitObj ? hitObj.pid : undefined, team: b.team, x: b.x, y: b.y, z: b.z, vx: b.vx, vz: b.vz })
       }
       B.splice(i, 1); continue
     }
@@ -555,11 +560,26 @@ export function explode(S, x, y, z, by, R, dmg, how) {
     if (c.alive || true) { c.vx += dx / dd * 16 * k; c.vz += dz / dd * 16 * k; if (c.alive && !c.air) { c.vy = 3 + 4 * k; c.air = true; c.airT = 0 } }
     if (!c.alive) c.spin += 1
   }
+  for (const o of PILLARS) { const p = S.pillars[o.pid]; if (p.stage >= 4 || y > o.top + 3) continue; const d = Math.hypot(o.x - x, o.z - z) - o.r; if (d < R) hurtPillar(S, o.pid, Math.min(34, dmg * PK.boom * Math.pow(1 - Math.max(0, d) / R, 0.7)), x, z) }
   for (const p of S.people) {
     if (p.state !== 'walk' || p.invT > 0) continue
     const d = Math.hypot(p.x - x, p.z - z, p.y - y)
     if (d < R) { const t = S.teams[p.team]; t.footHp -= dmg * 1.1 * (1 - d / R); t.footLast = { team: by, t: S.t }; const dd = Math.max(0.4, Math.hypot(p.x - x, p.z - z)); p.vx += (p.x - x) / dd * 8; p.vz += (p.z - z) / dd * 8; p.vy = 6; p.state = 'fly' }
   }
+}
+
+// ---------------------------------------------------------------- 柱の崩れ
+// hp 100: 無傷 → 70 ひび → 40 上が欠ける → 15 折れる → 0 瓦礫。体当たり・弾・爆発で削れ、試合が進むほど時間でも少しずつ崩れる
+export const PK = { bullet: 0.2, ram: 1.1, boom: 0.55, wear: [0.1, 0.22], from: 25 }   // 柱へのダメージ係数（弾・体当たり・爆発）と時間で崩れる速さ
+export function hurtPillar(S, i, dmg, x, z) {
+  const p = S.pillars[i]; if (!p || p.hp <= 0 || dmg <= 0) return
+  p.hp = Math.max(0, p.hp - dmg); const st = pillarStageOf(p.hp)
+  if (st > p.stage) { const o = PILLARS[i], from = p.stage; p.stage = st; applyPillars(S.pillars); ev(S, { k: 'pillar', i, stage: st, from, x: o.x, y: o.base, z: o.z, r: o.r, fx: x, fz: z }) }
+}
+function updatePillars(S, dt, live) {
+  if (!live || S.tMatch < PK.from) return
+  const k = 0.6 + S.tMatch / 150
+  for (const p of S.pillars) if (p.hp > 0) hurtPillar(S, p.i, p.wear * k * dt, null, null)
 }
 
 // ---------------------------------------------------------------- 地雷・オイル・煙幕・タレット

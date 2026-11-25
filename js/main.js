@@ -1,13 +1,13 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=6'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=6'
-import { EngineMix } from './engine.js?v=6'
-import { makeInputs } from './cpu.js?v=6'
-import { Stage } from './stage.js?v=6'
-import { loadPeople } from './people.js?v=6'
-import { loadCars } from './cars.js?v=6'
-import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=6'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=9'
+import { cleanName, cpuNames, NAME_MAX } from './names.js?v=9'
+import { EngineMix } from './engine.js?v=9'
+import { makeInputs } from './cpu.js?v=9'
+import { Stage } from './stage.js?v=9'
+import { loadPeople } from './people.js?v=9'
+import { loadCars } from './cars.js?v=9'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=9'
 
 const Q = new URLSearchParams(location.search)
 const EN = Q.get('lang') === 'en'
@@ -347,7 +347,7 @@ function drawRadar(cx, cz, yaw) {
   g.fillStyle = 'rgba(52,54,58,.95)'; g.beginPath(); g.arc(0, 0, WORLD, 0, 7); g.fill()
   g.strokeStyle = 'rgba(200,196,186,.8)'; g.lineWidth = 1.6; g.beginPath(); g.arc(0, 0, WORLD - 1, 0, 7); g.stroke()
   g.fillStyle = 'rgba(190,185,172,.85)'
-  for (const o of POLES) { g.beginPath(); g.arc(o.x, o.z, Math.max(1.4, o.r), 0, 7); g.fill() }
+  for (const o of POLES) { if (o.kind === 'pillar' && o.top - o.base < 1) continue; g.beginPath(); g.arc(o.x, o.z, Math.max(1.4, o.r), 0, 7); g.fill() }
   for (const o of BOXES) g.fillRect(o.x - o.w / 2, o.z - o.d / 2, o.w, o.d)
   g.fillStyle = 'rgba(206,168,50,.9)'
   for (const p of RAMPS) { g.beginPath(); g.arc(p.x, p.z, p.r0 * 0.8, 0, 7); g.fill() }

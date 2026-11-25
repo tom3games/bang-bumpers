@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=15'
+import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=16'
 
 export const DT = 1 / 60
 export const G = 24
@@ -34,8 +34,8 @@ export const CAR_TYPES = [
 ]
 // アイテム。role D=運転だけが使う・G=射手だけが使う
 export const ITEMS = {
-  turbo: { role: 'D', name: 'ターボ', ammo: 1 }, spear: { role: 'D', name: '槍', ammo: 1 }, oil: { role: 'D', name: 'オイル', ammo: 2 }, mine: { role: 'D', name: '地雷', ammo: 2 }, repair: { role: 'S', name: '修理', instant: true },
-  grenade: { role: 'G', name: '手榴弾', ammo: 3 }, flash: { role: 'G', name: '閃光弾', ammo: 2 }, smoke: { role: 'G', name: '煙幕', ammo: 2 }, ricochet: { role: 'G', name: '跳弾', ammo: 1 }, turret: { role: 'G', name: 'タレット', ammo: 1 },
+  turbo: { role: 'D', name: 'ターボ', ammo: 1 }, spear: { role: 'D', name: '槍', ammo: 1 }, ball: { role: 'D', name: '鉄球', en: 'IRON BALL', ammo: 1 }, oil: { role: 'D', name: 'オイル', ammo: 2 }, mine: { role: 'D', name: '地雷', ammo: 1 }, repair: { role: 'S', name: '修理', instant: true },
+  grenade: { role: 'G', name: '手榴弾', ammo: 3 }, flash: { role: 'G', name: '閃光弾', ammo: 1 }, smoke: { role: 'G', name: '煙幕', ammo: 2 }, ricochet: { role: 'G', name: '跳弾', ammo: 1 }, turret: { role: 'G', name: 'タレット', ammo: 1 },
 }
 export const ITEM_NAMES = Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.name]))
 export const ITEM_AMMO = Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.ammo || 1]))
@@ -67,7 +67,7 @@ export function createState(seed = 1, opts = {}) {
   const mode = opts.mode === 'points' ? 'points' : 'stock'
   const S = {
     seed, rng: mulberry(seed), t: 0, tMatch: 0, mode, T: opts.matchSec || (mode === 'points' ? POINT_SEC : MATCH_SEC), cd: opts.noCountdown ? 0 : (opts.prepSec ?? COUNTDOWN), over: false, overT: 0, phase: opts.noCountdown ? 'play' : 'prep', winner: -1,
-    go: 0, teams: [], cars: [], people: [], bullets: [], mines: [], oils: [], smokes: [], turrets: [], pickups: [], events: [], humanTeam: opts.humanTeam ?? 0, ranking: [], outCount: 0, wrecks: 0,
+    go: 0, teams: [], cars: [], people: [], bullets: [], mines: [], balls: [], oils: [], smokes: [], turrets: [], pickups: [], events: [], humanTeam: opts.humanTeam ?? 0, ranking: [], outCount: 0, wrecks: 0,
   }
   for (let i = 0; i < NTEAM; i++) {
     const lo = randLoadout(S.rng)
@@ -82,8 +82,7 @@ export function createState(seed = 1, opts = {}) {
 }
 export const CENTER_FIRST = 15, CENTER_GAP = [20, 30]   // 2026-11-25 回復が真ん中だけになったので少し早く・頻繁に（22・30〜48秒→15・20〜30秒）
 const PICK_W = [['spear', 2], // 2026-11-25 本人「ターボが多すぎる。アイテムの中からターボは消して」（ITEMS の定義は残す）
-   ['oil', 2], ['mine', 2], ['grenade', 3], // 2026-11-25 本人「回復は真ん中だけ」: 修理箱は真ん中の箱だけ
-   ['smoke', 2], ['ricochet', 2], ['turret', 2], ['flash', 2]]
+   ['mine', 2], ['ball', 2], ['flash', 2]] // 2026-11-25 本人「オイル・煙幕・跳弾・タレット・手榴弾いらない」「1回拾ったら1回だけ」「鉄球を増やす」。 // 2026-11-25 本人「回復は真ん中だけ」: 修理箱は真ん中の箱だけ
 const PICK_SUM = PICK_W.reduce((n, [, w]) => n + w, 0)
 function pickType(S) { let r = S.rng() * PICK_SUM, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return PICK_W[PICK_W.length - 1][0] }
 export const carById = (S, id) => S.cars.find(c => c.id === id)
@@ -191,6 +190,7 @@ function useDriverItem(S, t, c) {
   if (it.type === 'turbo') { c.turboT = 6; c.boost = 1; c.boostLock = false; ev(S, { k: 'turbo', team: t.id, x: c.x, y: c.y, z: c.z }) }
   else if (it.type === 'spear') { c.spearT = 9; ev(S, { k: 'spear', team: t.id, x: c.x, y: c.y, z: c.z }) }
   else if (it.type === 'mine') { const px = c.x - fx * 3.2, pz = c.z - fz * 3.2; S.mines.push({ x: px, z: pz, y: H(px, pz), team: t.id, arm: 1.1, life: 45, id: UID++ }); ev(S, { k: 'dropMine', team: t.id, x: px, y: H(px, pz), z: pz }) }
+  else if (it.type === 'ball') throwBall(S, t, c, fx, fz)
   else if (it.type === 'oil') { const px = c.x - fx * 3.2, pz = c.z - fz * 3.2; S.oils.push({ x: px, z: pz, y: H(px, pz), team: t.id, life: 14, r: 4, id: UID++ }); ev(S, { k: 'dropOil', team: t.id, x: px, y: H(px, pz), z: pz }) }
   if (--it.ammo <= 0) t.iD = null
 }
@@ -389,7 +389,7 @@ function stepBody(S, c, dt, inp, boosting) {
 }
 
 // ダメージ（車）。by は相手のチーム番号（null なら自爆）
-const HOW_K = { bullet: 0.22, ram: 0.27, rocket: 0.2, mine: 0.46 }   // v6: 受けるダメージを約2/3に
+const HOW_K = { bullet: 0.22, ram: 0.27, rocket: 0.2, mine: 0.46, ball: 0.46 }   // v6: 受けるダメージを約2/3に
 export function hurt(S, c, dmg, by, x, z, how) {
   if (!c.alive || dmg <= 0 || c.invT > 0 || S.phase !== 'play' || S.over) return 0
   dmg *= (HOW_K[how] ?? 0.4) / (CAR_TYPES[c.type] || CAR_TYPES[0]).dur * (S.mode === 'stock' ? 1 + clamp((S.tMatch - 120) / 240, 0, 0.6) : 1)
@@ -594,8 +594,61 @@ function updateGadgets(S, dt) {
     }
   }
 }
+// 鉄球: 車の前へ転がる。敵の車と人をはね、壁と柱で跳ね返り、遅くなると消える。自分の車には当たらない
+export const BALL_R = 1.15
+function throwBall(S, t, c, fx, fz) {
+  const sp = Math.max(27, c.vx * fx + c.vz * fz + 16)
+  // 壁の向こうに出さない: 車から前へ少しずつ進めて、空いている所まで
+  let d = 0.6; while (d < 3.2) { const o = []; const nx = c.x + fx * (d + 0.3), nz = c.z + fz * (d + 0.3); if (pushOutCircle(nx, c.y, nz, BALL_R, BALL_R * 2, o) || nx * nx + nz * nz > (WORLD - BALL_R) ** 2) break; d += 0.3 }
+  const x = c.x + fx * d, z = c.z + fz * d, y = Math.max(c.y, H(x, z)) + BALL_R
+  S.balls.push({ team: t.id, x, y, z, px: x, py: y, pz: z, vx: fx * sp, vy: 0, vz: fz * sp, life: 7, hit: {}, id: UID++ })
+  ev(S, { k: 'ball', team: t.id, x, y, z })
+}
+function updateBalls(S, dt) {
+  for (let i = S.balls.length - 1; i >= 0; i--) {
+    const b = S.balls[i]; b.life -= dt; b.px = b.x; b.py = b.y; b.pz = b.z
+    const h0 = H(b.x, b.z) + BALL_R
+    if (b.y <= h0 + 0.05) { // 坂で加速・減速
+      const sx = (H(b.x + 0.5, b.z) - H(b.x - 0.5, b.z)), sz = (H(b.x, b.z + 0.5) - H(b.x, b.z - 0.5))
+      b.vx -= sx * G * 0.7 * dt; b.vz -= sz * G * 0.7 * dt; const f = 1 - 0.28 * dt; b.vx *= f; b.vz *= f
+    }
+    b.vy -= G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt
+    const h = H(b.x, b.z) + BALL_R
+    if (b.y < h) { b.vy = b.py > h + 0.01 ? 0 : Math.max(0, (h - b.py) / dt * 0.85); b.y = h }
+    const out = []
+    if (pushOutCircle(b.x, b.y - BALL_R, b.z, BALL_R, BALL_R * 2, out)) {
+      let o = out[0]; for (const q of out) if (q[2] > o[2]) o = q
+      b.x += o[0] * o[2]; b.z += o[1] * o[2]
+      const vn = b.vx * o[0] + b.vz * o[1]
+      if (vn < 0) { b.vx -= 1.6 * vn * o[0]; b.vz -= 1.6 * vn * o[1]; if (o[3] && o[3].pid != null) hurtPillar(S, o[3].pid, Math.min(45, -vn * 1.6), b.x, b.z); ev(S, { k: 'ballHit', x: b.x, y: b.y, z: b.z, power: -vn, what: 'wall' }) }
+    }
+    const rr = Math.hypot(b.x, b.z)
+    if (rr > WORLD - BALL_R) { const ux = b.x / rr, uz = b.z / rr, vn = b.vx * ux + b.vz * uz; b.x = ux * (WORLD - BALL_R); b.z = uz * (WORLD - BALL_R); if (vn > 0) { b.vx -= 1.6 * vn * ux; b.vz -= 1.6 * vn * uz; ev(S, { k: 'ballHit', x: b.x, y: b.y, z: b.z, power: vn, what: 'wall' }) } }
+    const sp = Math.hypot(b.vx, b.vz)
+    for (const c of S.cars) {
+      if (c.team === b.team || b.y - BALL_R > c.y + CAR_H || b.y + BALL_R < c.y || S.t - (b.hit[c.id] ?? -99) < 9) continue
+      let on = false; for (const [cx, cz] of circles(c)) if (segCircle(b.px, b.pz, b.x, b.z, cx, cz, carR(c) + BALL_R) >= 0) { on = true; break }
+      if (!on) continue
+      b.hit[c.id] = S.t
+      const ux = sp > 0.1 ? b.vx / sp : 0, uz = sp > 0.1 ? b.vz / sp : 0, rel = Math.max(0, (b.vx - c.vx) * ux + (b.vz - c.vz) * uz), m = (CAR_TYPES[c.type] || CAR_TYPES[0]).mass
+      if (rel < 3) continue
+      if (c.alive && c.team >= 0 && hurt(S, c, Math.min(60, rel * 1.9), b.team, b.x, b.z, 'ball')) S.teams[b.team].stats.hits++
+      const inv = c.invT > 0 ? 0 : 1
+      c.vx += ux * rel * 0.75 / m * inv; c.vz += uz * rel * 0.75 / m * inv
+      if (c.alive && inv && !c.air && rel > 12) { c.vy = 5; c.air = true; c.airT = 0 }
+      b.vx *= 0.6; b.vz *= 0.6
+      ev(S, { k: 'ballHit', x: b.x, y: b.y, z: b.z, power: rel, what: 'car', id: c.id })
+    }
+    for (const p of S.people) {
+      if (p.state !== 'walk' || p.team === b.team || p.invT > 0 || sp < 4 || Math.abs(p.y + 0.9 - b.y) > BALL_R + 0.9) continue
+      if (segCircle(b.px, b.pz, b.x, b.z, p.x, p.z, BALL_R + 0.4) < 0) continue
+      const t = S.teams[p.team]; t.footHp -= 60; t.footLast = { team: b.team, t: S.t }; p.vx += b.vx * 0.5; p.vz += b.vz * 0.5; p.vy = 6; p.state = 'fly'
+    }
+    if (b.life <= 0 || sp < 2.5 && b.life < 6) { ev(S, { k: 'ballEnd', x: b.x, y: b.y, z: b.z }); S.balls.splice(i, 1) }
+  }
+}
 function updateMines(S, dt) {
-  updateGadgets(S, dt)
+  updateGadgets(S, dt); updateBalls(S, dt)
   for (let i = S.mines.length - 1; i >= 0; i--) {
     const m = S.mines[i]; m.life -= dt; m.arm -= dt
     if (m.life <= 0) { S.mines.splice(i, 1); continue }

@@ -1,13 +1,13 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=15'
-import { cleanName as cleanNameJa, cpuNames, NAME_MAX, FALLBACKS } from './names.js?v=15'
-import { EngineMix } from './engine.js?v=15'
-import { makeInputs } from './cpu.js?v=15'
-import { Stage } from './stage.js?v=15'
-import { loadPeople } from './people.js?v=15'
-import { loadCars } from './cars.js?v=15'
-import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=15'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=16'
+import { cleanName as cleanNameJa, cpuNames, NAME_MAX, FALLBACKS } from './names.js?v=16'
+import { EngineMix } from './engine.js?v=16'
+import { makeInputs } from './cpu.js?v=16'
+import { Stage } from './stage.js?v=16'
+import { loadPeople } from './people.js?v=16'
+import { loadCars } from './cars.js?v=16'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=16'
 
 const Q = new URLSearchParams(location.search)
 // 言語: ?lang= があればそれ。無ければ公開版は日本語、CrazyGames 版（__bbDefaultEN）は SDK の言語が ja の時だけ日本語・ほかは英語
@@ -43,6 +43,7 @@ function bgm(v, fade = 1.4) {
   const l = Snd.loops.bgm; if (l && l.g) { const t = Snd.ctx.currentTime; l.g.gain.cancelScheduledValues(t); l.g.gain.setValueAtTime(l.g.gain.value, t); l.g.gain.linearRampToValueAtTime(v, t + fade); l.vol = v }
 }
 const sfxLast = {}
+const itemEn = k => (ITEMS[k] && ITEMS[k].en) || k.toUpperCase()
 const playSnd = (name, o = {}) => { if ((o.vol ?? 1) < 0.035) return; const now = performance.now(); if (now - (sfxLast[name] || 0) < 28) return; sfxLast[name] = now; Snd.play(name, o) }
 
 // ------------------------------------------------------------ 画面
@@ -353,7 +354,7 @@ function onEvents() {
       }
       case 'out': { feed(L(`<b style="color:${hex(TEAM_COLORS[e.team])}">${tname(e.team)}</b> 脱落`, `<b style="color:${hex(TEAM_COLORS[e.team])}">${tname(e.team)}</b> is out`), TEAM_COLORS[e.team]); if (e.team === 0) { resultAt = S.t + 2.4; say(L('脱落', 'OUT'), false, 2200) } break }
       case 'swap': say(L(S.teams[0].driver === 0 ? '運転になった' : '射手になった', S.teams[0].driver === 0 ? 'You drive now' : 'You shoot now'), true, 1200); if (S.teams[0].driver === 1) { const c = S.cars.find(q => q.id === S.teams[0].car); if (c) aimYaw = c.gunYaw } break
-      case 'pickup': if (e.team === 0) say(L(ITEM_NAMES[e.type], e.type.toUpperCase()), true, 900, ITEMS[e.type] && ITEMS[e.type].role === 'D' ? L('運転のアイテム', 'Driver item') : ITEMS[e.type] && ITEMS[e.type].role === 'G' ? L('射手のアイテム', 'Shooter item') : ''); break
+      case 'pickup': if (e.team === 0) say(L(ITEM_NAMES[e.type], itemEn(e.type)), true, 900, ITEMS[e.type] && ITEMS[e.type].role === 'D' ? L('運転のアイテム', 'Driver item') : ITEMS[e.type] && ITEMS[e.type].role === 'G' ? L('射手のアイテム', 'Shooter item') : ''); break
       case 'repair': if (e.team === 0) say(L('修理', 'REPAIR'), true, 900); break
       case 'flash': { const mc = myTeam() && myTeam().car >= 0 ? S.cars.find(q => q.id === myTeam().car) : null; if (mc && mc.flashT > 0.3) { Snd.muffle(Math.min(2.2, mc.flashT * 0.8)); playSnd('bell', { vol: 0.16, rate: 3.2 }) } break }
       case 'overheat': if (e.team === 0) say(L('熱い！', 'OVERHEAT'), true, 900); break
@@ -450,7 +451,7 @@ function updateHUD(dt) {
   // アイテムの札: 今の役のアイテムだけ。色は役の色
   const slot = role === 'drive' ? t.iD : role === 'shoot' ? t.iG : null
   $('itemChip').hidden = !slot; $('itemChip').className = 'g itm ' + (role === 'drive' ? 'd' : 'g')
-  if (slot) $('itemT').textContent = L(ITEM_NAMES[slot.type], slot.type.toUpperCase()) + (slot.ammo > 1 ? ' ×' + slot.ammo : '') + (touchy ? '' : ' [E]')
+  if (slot) $('itemT').textContent = L(ITEM_NAMES[slot.type], itemEn(slot.type)) + (slot.ammo > 1 ? ' ×' + slot.ammo : '') + (touchy ? '' : ' [E]')
   $('bItem').hidden = !slot
   $('cross').hidden = role !== 'shoot'; $('cross').classList.toggle('lock', lockedOn)
   // 相棒の札

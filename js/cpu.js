@@ -1,7 +1,7 @@
 // CPU の頭。運転役・射手役・歩きを別々に作り、makeInputs で人の入力と混ぜて チームごとの入力 にする。
 // 状態(S)は読むだけ。サーバーに移しても同じ関数がそのまま動く。
-import { H, WORLD, POLES, pushOutCircle, lineClear, clamp } from './arena.js?v=15'
-import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=15'
+import { H, WORLD, POLES, pushOutCircle, lineClear, clamp } from './arena.js?v=16'
+import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=16'
 
 const MEM = new WeakMap()
 const mem = t => { let m = MEM.get(t); if (!m) { m = { stuckT: 0, revT: 0, lx: 0, lz: 0, lt: 0, tgt: -1, tgtT: 0, gtgt: -1, gT: 0, noise: 0, burst: 0, rest: 0.5, aim: null, side: 1, seed: t.id * 7.13 + 1, walkStuck: 0, wlx: 0, wlz: 0, wt: 0, wside: 1, dropT: 3 + t.id }; MEM.set(t, m) } return m }
@@ -60,7 +60,7 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
     for (const p of S.pickups) {
       if (p.t > 0) continue
       const d = Math.hypot(p.x - c.x, p.z - c.z)
-      const slotFull = p.type === 'repair' ? false : (['turbo', 'spear', 'oil', 'mine'].includes(p.type) ? t.iD : t.iG)
+      const slotFull = p.type === 'repair' ? false : (['turbo', 'spear', 'ball', 'oil', 'mine'].includes(p.type) ? t.iD : t.iG)
       const need = c.hp < 55 ? (p.type === 'repair' ? 1 : 0.35) : (p.type === 'repair' ? (c.hp < 85 ? 0.8 : 0) : (slotFull ? 0 : 1))
       if (need <= 0 || d > (need >= 1 ? 95 : 45)) continue
       if (d / need < bd) { bd = d / need; pk = p }
@@ -116,6 +116,7 @@ export function cpuDrive(S, t, c, dt, humanGunAim = null) {
     if (it === 'turbo' && ((mode === 'ram' || mode === 'flank') && tg && Math.hypot(tg.x - c.x, tg.z - c.z) > 30 || mode === 'flee') && Math.abs(diff) < 0.4) useD = true
     else if (it === 'spear' && tg && mode === 'ram' && Math.hypot(tg.x - c.x, tg.z - c.z) < 26 && Math.abs(diff) < 0.3) useD = true
     else if ((it === 'oil' || it === 'mine') && behind) useD = true
+    else if (it === 'ball' && !c.air) for (const e of en) { const ex = e.x + e.vx * 0.5 - c.x, ez = e.z + e.vz * 0.5 - c.z, d = Math.hypot(ex, ez); if (d > 6 && d < 34 && Math.abs(angDiff(Math.atan2(ex, ez), c.yaw)) < 0.14 && lineClear(c.x, c.y + 1.2, c.z, e.x, e.y + 1.2, e.z)) { useD = true; break } }
     m.useT = useD ? 4 : 0.8
   }
   const unstick = !!m.unstick; m.unstick = false

@@ -1,7 +1,7 @@
 // 粒（煙・火・火花・紙吹雪）、床と壁のペイントのしみ、飛んでいく部品、衝撃の輪
 import * as THREE from 'three'
-import { H } from './arena.js?v=15'
-import { splatTexture } from './textures.js?v=15'
+import { H } from './arena.js?v=16'
+import { splatTexture } from './textures.js?v=16'
 
 const VS = `
 attribute float aSize; attribute vec4 aColor; attribute float aShape;

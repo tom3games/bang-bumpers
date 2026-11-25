@@ -1,18 +1,18 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 const WIDE = 1.15
 import * as THREE from 'three'
-import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=15'
-import * as TX from './textures.js?v=15'
-import { rbox, Baker } from './models.js?v=15'
-import { buildCar } from './cars.js?v=15'
-import { crateMeshes, decalPlace } from './crates.js?v=15'
-import { makePerson, animate as animPerson } from './people.js?v=15'
-import { Particles, Splats, Debris, Rings } from './fx.js?v=15'
+import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=16'
+import * as TX from './textures.js?v=16'
+import { rbox, Baker } from './models.js?v=16'
+import { buildCar } from './cars.js?v=16'
+import { crateMeshes, decalPlace } from './crates.js?v=16'
+import { makePerson, animate as animPerson } from './people.js?v=16'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=16'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=15'
+import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, BALL_R, circles, carR } from './sim.js?v=16'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
@@ -295,10 +295,14 @@ export class Stage {
     this.mineMs = []; this.oilMs = []
     const mg = new THREE.CylinderGeometry(0.62, 0.7, 0.22, 16), mm = new THREE.MeshStandardMaterial({ color: 0x3b4a2e, roughness: 0.55, metalness: 0.4 }), lg = new THREE.SphereGeometry(0.12, 8, 6)
     for (let i = 0; i < 10; i++) { const g = new THREE.Group(); const b = new THREE.Mesh(mg, mm); b.castShadow = true; g.add(b); const l = new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false })); l.position.y = 0.16; g.add(l); g.visible = false; S.add(g); this.mineMs.push({ g, l }) }
+    // 鉄球
+    this.ballMs = []
+    { const bg = new THREE.SphereGeometry(BALL_R, 28, 20), tg = new THREE.TorusGeometry(BALL_R * 0.995, 0.05, 6, 40), bm = new THREE.MeshStandardMaterial({ color: 0x34373b, roughness: 0.38, metalness: 0.85 }), sm = new THREE.MeshStandardMaterial({ color: 0x8a5a36, roughness: 0.9, metalness: 0.2 })
+      for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(bg, bm); m.castShadow = true; const r1 = new THREE.Mesh(tg, sm); m.add(r1); m.visible = false; S.add(m); this.ballMs.push({ m, id: -1, dust: 0 }) } }
     const og = new THREE.CircleGeometry(1, 28); og.rotateX(-Math.PI / 2)
     for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(og, new THREE.MeshStandardMaterial({ color: 0x0b0b0e, roughness: 0.05, metalness: 0.9, transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: -3 })); m.visible = false; m.receiveShadow = true; S.add(m); this.oilMs.push(m) }
     this.pickMs = []
-    const icons = { turbo: 'bolt', spear: 'spear', oil: 'oil', mine: 'mine', repair: 'plus', grenade: 'gren', flash: 'flash', smoke: 'cloud', ricochet: 'zig', turret: 'tur' }
+    const icons = { turbo: 'bolt', spear: 'spear', ball: 'ball', oil: 'oil', mine: 'mine', repair: 'plus', grenade: 'gren', flash: 'flash', smoke: 'cloud', ricochet: 'zig', turret: 'tur' }
     this.pickIcons = {}
     for (const k in icons) this.pickIcons[k] = this.iconTex(null, icons[k])
     const CR = crateMeshes()
@@ -329,6 +333,7 @@ export class Stage {
     if (kind === 'rocket') { g.beginPath(); g.moveTo(64, 20); g.quadraticCurveTo(84, 50, 78, 84); g.lineTo(50, 84); g.quadraticCurveTo(44, 50, 64, 20); g.fill(); g.beginPath(); g.moveTo(50, 84); g.lineTo(40, 104); g.lineTo(56, 94); g.moveTo(78, 84); g.lineTo(88, 104); g.lineTo(72, 94); g.fill() }
     else if (kind === 'conf') { g.beginPath(); g.moveTo(34, 98); g.lineTo(50, 52); g.lineTo(76, 78); g.closePath(); g.fill(); for (const [x, y, r] of [[78, 34, 7], [96, 56, 6], [60, 28, 5], [98, 82, 5], [84, 54, 4]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill() } }
     else if (kind === 'mine') { g.beginPath(); g.arc(64, 70, 26, 0, 7); g.fill(); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; g.beginPath(); g.moveTo(64 + Math.cos(a) * 24, 70 + Math.sin(a) * 24); g.lineTo(64 + Math.cos(a) * 38, 70 + Math.sin(a) * 38); g.stroke() } }
+    else if (kind === 'ball') { g.beginPath(); g.arc(76, 64, 34, 0, 7); g.fill(); for (const [y, x0, x1] of [[40, 14, 36], [64, 8, 32], [88, 14, 36]]) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke() } }
     else if (kind === 'oil') { g.beginPath(); g.moveTo(64, 24); g.quadraticCurveTo(100, 64, 86, 86); g.quadraticCurveTo(64, 112, 42, 86); g.quadraticCurveTo(28, 64, 64, 24); g.fill() }
     else if (kind === 'plus') { g.fillRect(54, 26, 20, 76); g.fillRect(26, 54, 76, 20) }
     else if (kind === 'bolt') { g.beginPath(); g.moveTo(74, 16); g.lineTo(38, 70); g.lineTo(60, 70); g.lineTo(50, 112); g.lineTo(92, 54); g.lineTo(68, 54); g.closePath(); g.fill() }
@@ -512,6 +517,17 @@ export class Stage {
   syncThings(S, dt) {
     S.mines.forEach((m, i) => { const o = this.mineMs[i]; if (!o) return; o.g.visible = true; o.g.position.set(m.x, m.y + 0.1, m.z); o.l.visible = m.arm > 0 ? Math.floor(this.time * 10) % 2 === 0 : Math.floor(this.time * 3) % 2 === 0 })
     for (let i = S.mines.length; i < this.mineMs.length; i++) this.mineMs[i].g.visible = false
+    { const used = new Set()
+      for (const b of S.balls) {
+        const o = this.ballMs.find(q => q.id === b.id) || this.ballMs.find(q => !S.balls.some(w => w.id === q.id)); if (!o) continue
+        if (o.id !== b.id) { o.id = b.id; o.m.rotation.set(0, 0, 0) }
+        used.add(o); o.m.visible = true
+        const sp = Math.hypot(b.vx, b.vz); o.m.position.set(b.x, b.y, b.z)
+        if (sp > 0.1) o.m.rotateOnWorldAxis(_ballAx.set(b.vz / sp, 0, -b.vx / sp), sp / BALL_R * dt)
+        o.m.scale.setScalar(Math.min(1, Math.max(0.05, b.life / 0.4)))
+        o.dust -= dt; if (o.dust <= 0 && sp > 6 && b.y < H(b.x, b.z) + BALL_R + 0.15) { o.dust = 0.05; this.pSmoke.emit(b.x, b.y - BALL_R + 0.2, b.z, (Math.random() - 0.5) * 2, 0.8, (Math.random() - 0.5) * 2, 0.7, 0.6, 1.8, 0xcbc4b6, 0xcbc4b6, 0.4, 0, 1.5) }
+      }
+      for (const o of this.ballMs) if (!used.has(o)) { o.m.visible = false; o.id = -1 } }
     S.oils.forEach((o, i) => { const m = this.oilMs[i]; if (!m) return; m.visible = true; m.position.set(o.x, o.y + 0.05, o.z); const k = Math.min(1, (14 - o.life) / 0.5 + 0.2, o.life / 1); m.scale.setScalar(o.r * Math.max(0.2, k)) })
     for (let i = S.oils.length; i < this.oilMs.length; i++) this.oilMs[i].visible = false
     S.pickups.forEach((p, i) => {
@@ -614,6 +630,9 @@ export class Stage {
       case 'turret': this.snd('latch', { vol: this.vol(e.x, e.z, 0.6, 26), rate: 0.8 }); this.rings.ring(e.x, e.y, e.z, 3, 0x37b7d6, 0.5); break
       case 'turretEnd': if (e.dead) { this.snd('boom2', { vol: this.vol(e.x, e.z, 0.5, 30), rate: 1.6 }); for (let i = 0; i < 14; i++) fi.emit(e.x, e.y + 1, e.z, (rnd() - 0.5) * 10, rnd() * 8, (rnd() - 0.5) * 10, 0.7, 0.4, 0.1, 0xffe08a, 0xff6a20, 1, 18, 0.3) } break
       case 'spear': this.snd('spear', { vol: this.vol(e.x, e.z, 0.7, 30) }); this.rings.ring(e.x, e.y, e.z, 3, 0xe8b81c, 0.4); break
+      case 'ball': this.snd('thud', { vol: this.vol(e.x, e.z, 0.8, 34) }); this.snd('roll', { vol: this.vol(e.x, e.z, 0.6, 34), rate: 0.7 }); break
+      case 'ballHit': { const k = Math.min(1, e.power / 26); if (e.power < 3) break; this.snd(e.what === 'car' ? 'crash' : 'thud', { vol: this.vol(e.x, e.z, 0.35 + 0.6 * k, 40), rate: 0.85 }); for (let i = 0; i < 4 + 14 * k; i++) fi.emit(e.x, e.y, e.z, (rnd() - 0.5) * 12, rnd() * 7, (rnd() - 0.5) * 12, 0.4, 0.25, 0.05, 0xfff0b0, 0xffb040, 1, 16, 0.4); if (e.what === 'car') this.rings.ring(e.x, e.y, e.z, 3 + 2 * k, 0xffd9a0, 0.4, 0.7); break }
+      case 'ballEnd': for (let i = 0; i < 6; i++) sm.emit(e.x, e.y, e.z, (rnd() - 0.5) * 3, 0.8, (rnd() - 0.5) * 3, 0.8, 0.8, 2, 0xcbc4b6, 0xcbc4b6, 0.45, 0, 1.5); break
       case 'turbo': this.snd('whoosh', { vol: this.vol(e.x, e.z, 0.7, 30), rate: 1.0 }); this.rings.ring(e.x, e.y, e.z, 4, 0xffa020, 0.5); break
       case 'ricochet': this.snd('spring', { vol: this.vol(e.x, e.z, 0.6, 30), rate: 1.6 }); this.rings.ring(e.x, e.y, e.z, 3, 0xffd24a, 0.5); break
       case 'wswap': this.snd('latch', { vol: this.vol(e.x, e.z, 0.35, 22), rate: 1.2 }); break
@@ -723,9 +742,10 @@ export class Stage {
   render() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.cam) }
   clearDynamic() { this.splats.clear(); this.marks.clear(); this.pSmoke.clear(); this.pFire.clear(); for (const [, v] of this.cars) this.dropCar(v); this.cars.clear(); this.camYaw = undefined }
 }
+const _ballAx = new THREE.Vector3()
 const _aimDir = new THREE.Vector3()
 const _scorch = new THREE.Color(0x1c1a18), _white = new THREE.Color(0xffffff), _team = new THREE.Color()
 const CONF = [0x6b6258, 0x8a7a62, 0x4a4a48, 0x9a8f7c, 0x575149, 0xb0a48c]
-const PICKC = { turbo: 0xd98a3a, spear: 0xd98a3a, oil: 0xd98a3a, mine: 0xd98a3a, repair: 0x3c9a63, grenade: 0x3a9fbe, flash: 0x3a9fbe, smoke: 0x3a9fbe, ricochet: 0x3a9fbe, turret: 0x3a9fbe }
+const PICKC = { turbo: 0xd98a3a, spear: 0xd98a3a, ball: 0xd98a3a, oil: 0xd98a3a, mine: 0xd98a3a, repair: 0x3c9a63, grenade: 0x3a9fbe, flash: 0x3a9fbe, smoke: 0x3a9fbe, ricochet: 0x3a9fbe, turret: 0x3a9fbe }
 const ROLE_G = new Set(['grenade', 'flash', 'smoke', 'ricochet', 'turret'])
 const BOXG = new THREE.BoxGeometry(1.15, 1.15, 1.15), SPHG = new THREE.SphereGeometry(0.78, 18, 14)

@@ -1,13 +1,13 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=10'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=10'
-import { EngineMix } from './engine.js?v=10'
-import { makeInputs } from './cpu.js?v=10'
-import { Stage } from './stage.js?v=10'
-import { loadPeople } from './people.js?v=10'
-import { loadCars } from './cars.js?v=10'
-import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=10'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=12'
+import { cleanName, cpuNames, NAME_MAX } from './names.js?v=12'
+import { EngineMix } from './engine.js?v=12'
+import { makeInputs } from './cpu.js?v=12'
+import { Stage } from './stage.js?v=12'
+import { loadPeople } from './people.js?v=12'
+import { loadCars } from './cars.js?v=12'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=12'
 
 const Q = new URLSearchParams(location.search)
 const EN = Q.get('lang') === 'en'

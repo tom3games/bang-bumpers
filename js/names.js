@@ -1,5 +1,5 @@
 // なまえの入力（オンラインで参加する時に使う）。長さの上限・使えない言葉の判定・置き換え。DOM に依存しない
-import { BANNED } from './banned.js?v=10'
+import { BANNED } from './banned.js?v=12'
 export const NAME_MAX = 8                 // 全角で数えて8字まで
 export const FALLBACKS = ['ななしのドライバー', 'ななしのガンナー', 'とおりすがり', 'ななしさん']
 // 寄せる: 全角半角・大文字小文字・カタカナをひらがなへ・空白と記号を取る・伸ばす棒を取る

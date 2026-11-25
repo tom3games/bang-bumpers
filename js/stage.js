@@ -1,17 +1,18 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
+const WIDE = 1.15
 import * as THREE from 'three'
-import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=10'
-import * as TX from './textures.js?v=10'
-import { rbox, Baker } from './models.js?v=10'
-import { buildCar } from './cars.js?v=10'
-import { crateMeshes, decalPlace } from './crates.js?v=10'
-import { makePerson, animate as animPerson } from './people.js?v=10'
-import { Particles, Splats, Debris, Rings } from './fx.js?v=10'
+import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=12'
+import * as TX from './textures.js?v=12'
+import { rbox, Baker } from './models.js?v=12'
+import { buildCar } from './cars.js?v=12'
+import { crateMeshes, decalPlace } from './crates.js?v=12'
+import { makePerson, animate as animPerson } from './people.js?v=12'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=12'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=10'
+import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=12'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
@@ -355,7 +356,7 @@ export class Stage {
     if (!v) {
       const team = c.team
       const col = team >= 0 ? TEAM_COLORS[team] : [0x9a9da2, 0x5c6168, 0x6b4f3a, 0x3d4658, 0x5f6a48, 0x8d8774][c.id % 6]
-      v = buildCar(col, team >= 0 ? team + 1 : 0, c.type); v.type = c.type; v.g.scale.setScalar((CAR_TYPES[c.type] || CAR_TYPES[0]).scale); v.team = team; v.col = col; v.hpShown = 100; v.wheelRot = 0; v.smokeT = 0; v.fireT = 0; v.flash = 0; v.pitchAcc = 0; v.ps = 0; v.psV = 0; v.rs = 0; v.rsV = 0; v.hv = 0; v.hvV = 0; v.sp0 = 0; v.exploded = false; v.hoodOpen = 0
+      v = buildCar(col, team >= 0 ? team + 1 : 0, c.type); v.type = c.type; v.g.scale.setScalar((CAR_TYPES[c.type] || CAR_TYPES[0]).scale); for (const ch of v.body.children) { if (ch === v.turret) continue; ch.scale.x *= WIDE; ch.position.x *= WIDE } /* 2026-11-25 本人「車の横幅もう少し広げて」: 車体だけ横に広げる（射手と銃座は広げない） */ v.team = team; v.col = col; v.hpShown = 100; v.wheelRot = 0; v.smokeT = 0; v.fireT = 0; v.flash = 0; v.pitchAcc = 0; v.ps = 0; v.psV = 0; v.rs = 0; v.rsV = 0; v.hv = 0; v.hvV = 0; v.sp0 = 0; v.exploded = false; v.hoodOpen = 0
       v.g.traverse(o => { if (o.isMesh) o.matrixAutoUpdate = true })
       this.scene.add(v.g); this.cars.set(c.id, v)
       if (team < 0) for (const m of v.paints) m.color.setHex(col)
@@ -551,7 +552,7 @@ export class Stage {
         const col = TEAM_COLORS[e.team] ?? 0xffffff
         const car = S.cars.find(c => c.team === e.team && c.alive); const v = car && this.cars.get(car.id); if (v) v.flash = 0.05
         if (e.w === 'paint') { this.snd('pop', { vol: this.vol(e.x, e.z, 0.5, 30), rate: 1.1 + rnd() * 0.5, jitter: 0.08 }); fi.emit(e.x, e.y, e.z, 0, 0, 0, 0.07, 0.34, 0.12, 0xfff0c8, col, 0.7) }
-        else if (e.w === 'rocket') { this.snd('whoosh', { vol: this.vol(e.x, e.z, 0.8, 34), rate: 1.4 }); this.snd('spring', { vol: this.vol(e.x, e.z, 0.5, 30), rate: 0.9 }); for (let i = 0; i < 6; i++) sm.emit(e.x, e.y, e.z, (rnd() - 0.5) * 3, rnd() * 2, (rnd() - 0.5) * 3, 0.9, 0.5, 1.6, 0xe8e4da, 0xc9c5bb, 0.5, 0, 1.5) }
+        else if (e.w === 'rocket') { this.snd('whoosh', { vol: this.vol(e.x, e.z, 0.75, 34), rate: 0.85 }); this.snd('shot', { vol: this.vol(e.x, e.z, 0.6, 34), rate: 0.5 }); /* 2026-11-25 本人「ミサイルの効果音おかしい」: バネの音（ボヨン）を外し、低い発射音と噴射音に */ for (let i = 0; i < 6; i++) sm.emit(e.x, e.y, e.z, (rnd() - 0.5) * 3, rnd() * 2, (rnd() - 0.5) * 3, 0.9, 0.5, 1.6, 0xe8e4da, 0xc9c5bb, 0.5, 0, 1.5) }
         else { this.snd('shot', { vol: this.vol(e.x, e.z, 0.6, 30), rate: 1.3 }); this.snd('paper', { vol: this.vol(e.x, e.z, 0.6, 30), rate: 1.2 }); this.confettiBurst(e.x, e.y, e.z, 14, 6) }
         break
       }

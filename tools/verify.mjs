@@ -161,7 +161,7 @@ await t('カメラ: 車が壁ぎわでも、壁の手前に寄って車が見え
   return { dist: out }
 })
 // ------------------------------------------------------------ スマホ: 運転（ボタン）と、壊れた後に歩いて空き車へ
-await t('スマホ運転: ペダル・ハンドル・ブースト・Rで動く → 壊されたら5秒走り回って再スタート', async () => {
+await t('スマホ運転: ペダル・ハンドル・ブースト・Rで動く → 壊されたら10秒走り回って再スタート', async () => {
   const p = await open('touch=1&speed=1&norender=1&seed=7', { width: 390, height: 844 }, true)
   await p.click('#goDrive'); await p.waitForFunction(() => __bb.S().phase === 'play' && __bb.S().tMatch > 0.3, null, { timeout: 8000 })
   const press = async (sel, ms) => { const b = await p.locator(sel).boundingBox(); await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.mouse.down(); await sleep(ms); await p.mouse.up() }
@@ -179,7 +179,7 @@ await t('スマホ運転: ペダル・ハンドル・ブースト・Rで動く �
   // 壊される → 歩き
   await p.evaluate(() => { __bb.S().cars.find(q => q.team === 0).hp = 0 })
   await p.waitForFunction(() => __bb.role() === 'walk', null, { timeout: 8000 })
-  // 歩いている間: 左スティック（内部入力）で走り回る。5秒たつと新しい車で再スタート
+  // 歩いている間: 左スティック（内部入力）で走り回る。RESPAWN_SEC（10秒）たつと新しい車で再スタート
   const t0 = await p.evaluate(() => __bb.S().t)
   await p.evaluate(() => { const t = __bb.S().teams[0]; t.footHp = 9999 })   // 試験中は歩きの間に倒れないように
   const resp = await p.evaluate(() => ({ hidden: document.getElementById('resp').hidden, n: document.querySelector('#resp b').textContent }))
@@ -189,13 +189,13 @@ await t('スマホ運転: ペダル・ハンドル・ブースト・Rで動く �
   await sleep(2500)
   const w1 = await p.evaluate(() => { const t = __bb.S().teams[0]; return [t.p[0].x, t.p[0].z] })
   expect(Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) > 5, '歩いても動かない')
-  await p.waitForFunction(() => __bb.role() === 'drive', null, { timeout: 12000 })
+  await p.waitForFunction(() => __bb.role() === 'drive', null, { timeout: 20000 })
   await p.evaluate(() => { __bb.K.stick = null })
   const t1 = await p.evaluate(() => __bb.S().t)
-  const boarded = t1 - t0 > 4.8 && t1 - t0 < 6.8
+  const boarded = t1 - t0 > 9.8 && t1 - t0 < 11.8
   const rs = await p.evaluate(() => ({ hidden: document.getElementById('resp').hidden }))
   expect(rs.hidden, '再スタートしたのに数が残っている')
-  expect(boarded, '5秒で再スタートしない ' + (t1 - t0)); const s3 = await S(p); expect(s3.role === 'drive', 'role=' + s3.role)
+  expect(boarded, '10秒で再スタートしない ' + (t1 - t0)); const s3 = await S(p); expect(s3.role === 'drive', 'role=' + s3.role)
   expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return { walk: 'ok', stock: s3.stock, sec: +(t1 - t0).toFixed(1) }
 })
 await t('スマホ射手: 画面をなぞると向きが変わる・大ボタンで撃てる', async () => {
@@ -256,14 +256,14 @@ await t('運転中は相棒の射手の武器表示が無い（射手のとき�
   const b = await p.evaluate(() => ({ hidden: document.getElementById('partner').hidden }))
   expect(!b.hidden, '射手のときは相棒（運転）の札が出る'); expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return { drive: 'hidden', shoot: 'shown' }
 })
-await t('大破→5秒走り回る→再スタート（画面）: 数が減る・歩く・新しい車・予備の車は無い', async () => {
+await t('大破→10秒走り回る→再スタート（画面）: 数が減る・歩く・新しい車・予備の車は無い', async () => {
   const p = await open('norender=1&seed=35'); await p.click('#goDrive'); await p.waitForFunction(() => __bb.S().phase === 'play' && __bb.S().tMatch > 0.5, null, { timeout: 30000 })
   const n0 = await p.evaluate(() => __bb.S().cars.filter(c => c.alive).length); expect(n0 === 6, '生きている車が6台でない ' + n0)
   await p.evaluate(() => { const S = __bb.S(), c = S.cars.find(q => q.id === S.teams[0].car); c.invT = 0; c.hp = 0 })
   await p.waitForFunction(() => __bb.role() === 'walk', null, { timeout: 5000 })
   const seen = []; const T0 = Date.now()
-  while (Date.now() - T0 < 9000) { const r = await p.evaluate(() => ({ role: __bb.role(), n: document.querySelector('#resp b').textContent, hid: document.getElementById('resp').hidden })); if (!r.hid && seen[seen.length - 1] !== r.n) seen.push(r.n); if (r.role === 'drive') break; await sleep(80) }
-  expect(/5.*4.*3.*2.*1/.test(seen.join('')), '数の出方 ' + seen.join())
+  while (Date.now() - T0 < 15000) { const r = await p.evaluate(() => ({ role: __bb.role(), n: document.querySelector('#resp b').textContent, hid: document.getElementById('resp').hidden })); if (!r.hid && seen[seen.length - 1] !== r.n) seen.push(r.n); if (r.role === 'drive') break; await sleep(80) }
+  expect(/10.*9.*5.*4.*3.*2.*1/.test(seen.join(',')), '数の出方 ' + seen.join())
   const r = await p.evaluate(() => { const S = __bb.S(); return { alive: S.cars.filter(c => c.alive).length, spare: S.cars.filter(c => c.team < 0).length, role: __bb.role() } })
   expect(r.role === 'drive' && r.alive === 6 && r.spare === 0, JSON.stringify(r)); expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return { count: seen.join('') }
 })

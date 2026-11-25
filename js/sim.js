@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=10'
+import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=12'
 
 export const DT = 1 / 60
 export const G = 24
@@ -11,7 +11,7 @@ export const POINT_SEC = 180        // ポイント制の制限時間
 export const COUNTDOWN = 10         // 準備の秒数（そのあと 3・2・1・GO）
 export const GO_COUNT = 3
 export const STOCK = 3
-export const RESPAWN_SEC = 5        // 大破してから再スタートまで（そのあいだ人が走り回る）
+export const RESPAWN_SEC = 10       // 大破してから再スタートまで（そのあいだ人が走り回る）。2026-11-25 本人「5秒じゃなくて10秒」
 export const MODES = ['stock', 'points']
 export const TEAM_NAMES = ['あか', 'あお', 'きいろ', 'みどり', 'もも', 'しろ']
 export const TEAM_COLORS = [0xa8392f, 0x2f5f9a, 0xb8962f, 0x3c7a4e, 0x8d4c85, 0xd6d2c4]
@@ -81,7 +81,8 @@ export function createState(seed = 1, opts = {}) {
   return S
 }
 export const CENTER_FIRST = 22, CENTER_GAP = [30, 48]
-const PICK_W = [['turbo', 2], ['spear', 2], ['oil', 2], ['mine', 2], ['repair', 3], ['grenade', 3], ['smoke', 2], ['ricochet', 2], ['turret', 2], ['flash', 2]]
+const PICK_W = [['spear', 2], // 2026-11-25 本人「ターボが多すぎる。アイテムの中からターボは消して」（ITEMS の定義は残す）
+   ['oil', 2], ['mine', 2], ['repair', 3], ['grenade', 3], ['smoke', 2], ['ricochet', 2], ['turret', 2], ['flash', 2]]
 function pickType(S) { let r = S.rng() * 22, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return 'repair' }
 export const carById = (S, id) => S.cars.find(c => c.id === id)
 export const teamCar = (S, t) => t.car >= 0 ? carById(S, t.car) : null
@@ -269,12 +270,12 @@ function stepBody(S, c, dt, inp, boosting) {
     c.hb += ((inp && inp.hb && Math.abs(sp) > 4 ? 1 : 0) - c.hb) * Math.min(1, 9 * dt)
     // ハンドル: ゆっくり切れて、ゆっくり戻る。重い車ほど鈍い
     const want = inp ? clamp(inp.steer || 0, -1, 1) : 0
-    const rate = (Math.abs(want) > Math.abs(c.steer) || Math.sign(want) !== Math.sign(c.steer) && want !== 0 ? 2.4 : 1.8) * (1.15 - 0.2 * T.mass)
+    const rate = (Math.abs(want) > Math.abs(c.steer) || Math.sign(want) !== Math.sign(c.steer) && want !== 0 ? 2.0 : 1.6) * (1.15 - 0.2 * T.mass)
     const d = want - c.steer
     c.steer += Math.sign(d) * Math.min(Math.abs(d), rate * dt)
     // 曲がり: 切った角から目標の向きの回り方が決まり、車体の向きはそれに遅れてついてくる
     const spN = clamp(Math.abs(sp) / Math.max(10, vmax), 0, 1.3)
-    const maxSteer = (0.31 - 0.19 * clamp(Math.abs(sp) / 30, 0, 1)) * T.steer
+    const maxSteer = (0.25 - 0.15 * clamp(Math.abs(sp) / 30, 0, 1)) * T.steer   // 2026-11-25 本人「左右の効きが強すぎる」0.31→0.25（約2割弱く）
     const under = 1 - 0.24 * clamp(spN * spN * Math.abs(c.steer) * 1.4, 0, 1)         // 速い時に強く切ると前輪が負けて外へふくらむ
     const hard = clamp((Math.abs(c.steer) - 0.8) / 0.15, 0, 1) * clamp((Math.abs(sp) / vmax - 0.6) / 0.2, 0, 1) * (thrIn > 0.3 ? 1 : 0)  // 速い時の大きな舵は後ろが流れる（なめらかに効く）
     let yawT = sp * Math.tan(c.steer * maxSteer) / 2.7 * under * (1 + 0.16 * hard) * (1 + 0.55 * c.hb)

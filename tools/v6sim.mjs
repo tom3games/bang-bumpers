@@ -7,12 +7,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++
 
 // 1. 真ん中: 半径20mが完全に平ら
 { let mx = 0; for (let x = -20; x <= 20; x += 0.5) for (let z = -20; z <= 20; z += 0.5) if (x * x + z * z <= 400) mx = Math.max(mx, Math.abs(H(x, z)))
-  ok(mx === 0, `真ん中 半径20m の高さの最大 = ${mx}`) }
+  ok(true, `（v9 で真ん中はお椀形のくぼみにしたので平らの試験は外す。くぼみの試験は tools/bowltest.mjs）真ん中の高さの最大 = ${mx}`) }
 { // 真ん中を走り抜ける: 車の高さと耐久
   const S = createState(5, { noCountdown: true }); const c = S.cars.find(q => q.team === 0); c.x = -30; c.z = 0; c.yaw = Math.PI / 2; c.vx = 0
   let minY = 9, maxY = -9, hp0 = c.hp
   for (let i = 0; i < 60 * 6; i++) { step(S, { 0: { throttle: 1, steer: 0 } }, DT); minY = Math.min(minY, c.y); maxY = Math.max(maxY, c.y) }
-  ok(minY === 0 && maxY === 0 && c.hp === hp0 && c.x > 20, `真ん中を通過: y ${minY}..${maxY} hp ${c.hp} 位置x ${c.x.toFixed(0)}`)
+  ok(c.hp === hp0 && c.x > 20, `真ん中を通過: y ${minY}..${maxY} hp ${c.hp} 位置x ${c.x.toFixed(0)}`)
 }
 
 // 2. ジャンプ台: 全方向から進入。耐久が減らない・めり込まない・止まらない
@@ -63,12 +63,12 @@ ok(worst.stillMax < 3, `台のまわりで止まった最長 ${worst.stillMax * 
   const seq = log.filter(x => /ready|go/.test(x)).join(' ')
   ok(/go321:3.*go321:2.*go321:1.*:go$/.test(seq.replace(/ /g, '')) || /go321:3.*go321:2.*go321:1.* \d\.\d:go/.test(seq), `3・2・1・GO の順 ${seq} / 3・2・1 の間は動かない=${!moved}`) }
 
-// 4. 再スタート 5秒 と 歩き中の撃破
+// 4. 再スタート RESPAWN_SEC（v6 は5秒・2026-11-25 から10秒）と 歩き中の撃破
 for (const mode of ['stock', 'points']) {
   const S = createState(11, { noCountdown: true, mode }); const t = S.teams[0], c = S.cars.find(q => q.id === t.car)
   c.hp = 1; c.invT = 0; c.lastHit = { team: 1, t: S.t }
   const k0 = S.teams[1].kills, st0 = t.stock; let tw = -1, tr = -1, newId = -1
-  for (let i = 0; i < 60 * 9; i++) {
+  for (let i = 0; i < 60 * (RESPAWN_SEC + 4); i++) {
     step(S, {}, DT)
     if (tw < 0 && t.walking) { tw = S.t; ok(t.p[0].state === 'fly' || t.p[0].state === 'walk', `${mode}: 大破 → 人が出る (${t.p[0].state})`) }
     if (tr < 0 && !t.walking && t.car >= 0 && tw >= 0) { tr = S.t; newId = t.car }
@@ -92,8 +92,8 @@ for (const mode of ['stock', 'points']) {
   let tdead = -1
   for (let i = 0; i < 60 * 3 && tdead < 0; i++) { t.footLast = null; S.bullets.push({ type: 'paint', team: 1, x: p.x + 2, y: p.y + 1, z: p.z, px: p.x + 4, py: p.y + 1, pz: p.z, vx: -58, vz: 0, vy: 0, life: 1, id: 9000 + i }); step(S, {}, DT); if (t.footDead) tdead = S.t }
   ok(t.footDead && S.teams[1].kills === k0 + 1, `歩き中に撃破されて相手に1点 (${k0}->${S.teams[1].kills})`)
-  const tw0 = S.t; let tr = -1; for (let i = 0; i < 60 * 8 && tr < 0; i++) { step(S, {}, DT); if (!t.walking) tr = S.t }
-  ok(tr > 0 && tr - tw0 < 5.1 && t.car >= 0 && S.cars.find(q => q.id === t.car).alive, `倒された後もそのまま5秒ぶん待って再スタート（死亡後 ${(tr - tw0).toFixed(1)}秒）`)
+  const tw0 = S.t; let tr = -1; for (let i = 0; i < 60 * (RESPAWN_SEC + 3) && tr < 0; i++) { step(S, {}, DT); if (!t.walking) tr = S.t }
+  ok(tr > 0 && tr - tw0 < RESPAWN_SEC + 0.1 && t.car >= 0 && S.cars.find(q => q.id === t.car).alive, `倒された後もそのまま RESPAWN_SEC ぶん待って再スタート（死亡後 ${(tr - tw0).toFixed(1)}秒）`)
 }
 // 5. 予備の車が無い
 { const S = createState(1, { noCountdown: true }); ok(S.cars.every(c => c.team >= 0) && S.cars.length === NTEAM && NTEAM === 6, `ステージの車は6台だけ（予備なし）: ${S.cars.length}台`) }

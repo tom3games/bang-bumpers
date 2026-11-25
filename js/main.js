@@ -1,13 +1,13 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=13'
-import { cleanName as cleanNameJa, cpuNames, NAME_MAX, FALLBACKS } from './names.js?v=13'
-import { EngineMix } from './engine.js?v=13'
-import { makeInputs } from './cpu.js?v=13'
-import { Stage } from './stage.js?v=13'
-import { loadPeople } from './people.js?v=13'
-import { loadCars } from './cars.js?v=13'
-import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=13'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=14'
+import { cleanName as cleanNameJa, cpuNames, NAME_MAX, FALLBACKS } from './names.js?v=14'
+import { EngineMix } from './engine.js?v=14'
+import { makeInputs } from './cpu.js?v=14'
+import { Stage } from './stage.js?v=14'
+import { loadPeople } from './people.js?v=14'
+import { loadCars } from './cars.js?v=14'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=14'
 
 const Q = new URLSearchParams(location.search)
 // 言語: ?lang= があればそれ。無ければ公開版は日本語、CrazyGames 版（__bbDefaultEN）は SDK の言語が ja の時だけ日本語・ほかは英語

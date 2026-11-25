@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=13'
+import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=14'
 
 export const DT = 1 / 60
 export const G = 24

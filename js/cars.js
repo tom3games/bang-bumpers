@@ -1,10 +1,10 @@
 // 車の見た目: WRECK ISLE の実車（Car Concept・CC BY 4.0）と、断面をつないだ曲面の車体（BREAK THE ROUTE 由来）。
 // 3種: 0 セダン / 1 クーペ（実車モデル）/ 2 ピックアップ。屋根の射手台に人と機関銃
 import * as THREE from 'three'
-import { ProcCar, loadCarModel, sharedMats } from './btrcar.js?v=13'
+import { ProcCar, loadCarModel, sharedMats } from './btrcar.js?v=14'
 import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js'
-import { numberTexture } from './textures.js?v=13'
-import { makePerson, ik2, curl } from './people.js?v=13'
+import { numberTexture } from './textures.js?v=14'
+import { makePerson, ik2, curl } from './people.js?v=14'
 
 let TEMPLATE = null
 // 実車モデルは 68 個の部品に分かれている。同じ材質ごとに束ねて描く回数を減らす（ボンネット・ミラー・車輪は別に残す）

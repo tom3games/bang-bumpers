@@ -238,7 +238,7 @@ function startMatch(role) {
   boardCache = ''; $('feed').innerHTML = ''; $('msg').textContent = ''
   hintT = 0; hintShown = {}
   buildPrep()
-  Snd.init(); bgm(0.26); Snd.loop('amb', 'snd/amb1.mp3', 0.08, 1)
+  Snd.init(); bgm(0.26)   // 環境音 amb1 は 1〜6kHz の「じー」という雑音の短いループだったので鳴らさない（2026-11-25）
   playSnd('switch', { vol: 0.7 })
   if (window.__bbOnStart) window.__bbOnStart()
 }
@@ -511,7 +511,7 @@ async function boot() {
   $('loadbar').style.width = '25%'
   await Promise.all([loadPeople(), loadCars()]); stage.initPeople()
   $('loadbar').style.width = '55%'
-  await Promise.race([Snd.prefetch(['snd/music.mp3', 'snd/amb1.mp3']), new Promise(r => setTimeout(r, 5000))])
+  await Promise.race([Snd.prefetch(['snd/music.mp3']), new Promise(r => setTimeout(r, 5000))])
   $('loadbar').style.width = '100%'
   await new Promise(r => setTimeout(r, 160))
   $('loading').classList.add('off'); setTimeout(() => $('loading').remove(), 600)

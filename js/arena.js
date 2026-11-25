@@ -26,8 +26,11 @@ export function rampH(p, x, z) {
   const d = Math.hypot(x - p.x, z - p.z); if (d >= p.r0) return 0
   return p.h * (d <= p.r1 ? 1 : (p.r0 - d) / (p.r0 - p.r1))
 }
+// 真ん中のお椀（なだらかな半円のくぼみ）。縁で傾きが 0 になる余弦の形なので段差も尖りも無い。最大の傾き ≒ 0.2（約11度）
+export const BOWL = { R: 22, d: 2.8 }
+export function bowlH(x, z) { const r2 = x * x + z * z; if (r2 >= BOWL.R * BOWL.R) return 0; return -BOWL.d * 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r2) / BOWL.R)) }
 export function H(x, z) {
-  let h = 0
+  let h = bowlH(x, z)
   for (const p of RAMPS) { if (Math.abs(x - p.x) < p.r0 && Math.abs(z - p.z) < p.r0) { const hh = rampH(p, x, z); if (hh > h) h = hh } }
   return h
 }

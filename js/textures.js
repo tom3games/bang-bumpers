@@ -129,7 +129,9 @@ export function floorPaint(size = 2048) {
   const [c, g] = canvas(size, size), R = rnd(31), k = size / (WORLD * 2)
   const X = x => (x + WORLD) * k, Z = z => (z + WORLD) * k
   const ring = (r, w, col, dash) => { g.save(); g.strokeStyle = col; g.lineWidth = w * k; if (dash) g.setLineDash(dash.map(d => d * k)); g.beginPath(); g.arc(X(0), Z(0), r * k, 0, 7); g.stroke(); g.restore() }
-  // 真ん中: 耐久回復の箱が出る所。平らな床に白い輪と十字だけ（穴や影は作らない）
+  // 真ん中: お椀形のくぼみ（半径22m）。暗くせず、縁に黄黒の輪・斜面に淡い白の輪・底に耐久回復の箱の印
+  { const gr = g.createRadialGradient(X(0), Z(0), 0, X(0), Z(0), 22 * k); gr.addColorStop(0, 'rgba(205,202,192,0.20)'); gr.addColorStop(1, 'rgba(205,202,192,0.07)'); g.fillStyle = gr; g.beginPath(); g.arc(X(0), Z(0), 22 * k, 0, 7); g.fill() }
+  ring(21.4, 0.9, 'rgba(214,176,48,0.8)', [2.4, 2.4]); ring(14, 0.25, 'rgba(235,232,222,0.5)'); ring(10, 0.2, 'rgba(235,232,222,0.4)', [1.6, 1.6])
   ring(5.2, 0.35, 'rgba(235,232,222,0.85)'); ring(7.4, 0.2, 'rgba(235,232,222,0.55)', [1.6, 1.6])
   { g.save(); g.translate(X(0), Z(0)); g.fillStyle = 'rgba(67,209,122,0.35)'; g.fillRect(-1.0 * k, -3.4 * k, 2.0 * k, 6.8 * k); g.fillRect(-3.4 * k, -1.0 * k, 6.8 * k, 2.0 * k); g.restore() }
   ring(36, 0.25, 'rgba(225,222,212,0.75)', [3, 3]); ring(72, 0.25, 'rgba(225,222,212,0.7)', [4, 4]); ring(106, 0.3, 'rgba(225,222,212,0.75)')

@@ -1,6 +1,6 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 import * as THREE from 'three'
-import { WORLD, RAMPS, POLES, BOXES, H, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=9'
+import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=9'
 import * as TX from './textures.js?v=9'
 import { rbox, Baker } from './models.js?v=9'
 import { buildCar } from './cars.js?v=9'
@@ -74,7 +74,14 @@ export class Stage {
     // 夜空
     const sky = new THREE.Mesh(new THREE.SphereGeometry(520, 32, 16), new THREE.MeshBasicMaterial({ map: TX.skyTexture(), side: THREE.BackSide, fog: false, depthWrite: false, toneMapped: false })); sky.renderOrder = -10; S.add(sky); this.sky = sky
     // 床: 細かい粒 × 地の色 × 線と塗装 を1枚で重ねる
-    const fg = new THREE.PlaneGeometry(WORLD * 2 + 20, WORLD * 2 + 20, 1, 1); fg.rotateX(-Math.PI / 2)   // 床は完全に平ら（真ん中に穴や坂は無い）
+    // 床: 平らな外側は粗く、真ん中のお椀（bowlH）は 1m 刻みの格子で高さを付ける
+    const fg = (() => {
+      const FWh = WORLD + 10, xs = [-FWh]; for (const v of [-100, -60, -34]) xs.push(v); for (let v = -26; v <= 26; v += 1) xs.push(v); for (const v of [34, 60, 100]) xs.push(v); xs.push(FWh)
+      const n = xs.length, pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2), idx = []
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i, x = xs[i], z = xs[j]; pos.set([x, bowlH(x, z), z], k * 3); uv.set([(x + FWh) / (2 * FWh), 0.5 - z / (2 * FWh)], k * 2) }
+      for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i, b = a + 1, c = a + n, d = c + 1; idx.push(a, c, b, b, c, d) }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g
+    })()
     const base = TX.floorBase(aniso), tint = TX.floorTint(), paint = TX.floorPaint(this.low ? 1536 : 3072)
     const fm = new THREE.MeshStandardMaterial({ map: base, bumpMap: base, bumpScale: 2.0, roughness: 0.9, metalness: 0.02 })
     const FW = WORLD * 2 + 20
@@ -88,7 +95,8 @@ export class Stage {
     }
     void FW
     const floor = new THREE.Mesh(fg, fm); floor.receiveShadow = true; S.add(floor)
-    const out = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 1 })); out.rotation.x = -Math.PI / 2; out.position.y = -0.04; S.add(out)
+    const out = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 1 })); out.rotation.x = -Math.PI / 2; out.position.y = -3.2;   // 床の外側の地面。お椀の底(-2.8m)より下に置く（上にあると穴に見える）
+     S.add(out)
     // 外周の壁（円）・上の縁の光・観客席
     const wm = new THREE.MeshStandardMaterial({ map: TX.wallRingTexture(aniso), emissiveMap: TX.wallRingEmissive(), emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.85, metalness: 0.1, side: THREE.BackSide })
     wm.map.repeat.set(-5, 1); wm.map.offset.x = 1; wm.emissiveMap.repeat.set(-5, 1); wm.emissiveMap.offset.x = 1
@@ -293,16 +301,21 @@ export class Stage {
     this.pickIcons = {}
     for (const k in icons) this.pickIcons[k] = this.iconTex(null, icons[k])
     const CR = crateMeshes()
+    { const bg = new THREE.CylinderGeometry(0.16, 0.26, 12, 12, 1, true), pa = bg.attributes.position, col = new Float32Array(pa.count * 3)
+      for (let i = 0; i < pa.count; i++) { const t = Math.max(0, 1 - (pa.getY(i) + 6) / 12); const v = Math.pow(t, 1.4); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = v }
+      bg.setAttribute('color', new THREE.BufferAttribute(col, 3)); this.beamGeo = bg }
     const decG = new THREE.PlaneGeometry(1, 1)
     for (let i = 0; i < 32; i++) {
-      const g = new THREE.Group(), kinds = {}
-      for (const k of ['driver', 'gunner', 'repair']) { const m = CR[k].clone(); m.visible = false; m.castShadow = true; m.receiveShadow = true; g.add(m); kinds[k] = m }
+      const g = new THREE.Group(), kinds = {}, sp = new THREE.Group()   // sp: 浮いてゆっくり回る箱
+      for (const k of ['driver', 'gunner', 'repair']) { const m = CR[k].clone(); m.visible = false; m.castShadow = true; m.receiveShadow = true; sp.add(m); kinds[k] = m }
       const dm = new THREE.MeshStandardMaterial({ transparent: true, depthWrite: false, roughness: 0.7, metalness: 0, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })
       const dTop = new THREE.Mesh(decG, dm); dTop.rotation.x = -Math.PI / 2; const dF = new THREE.Mesh(decG, dm), dB = new THREE.Mesh(decG, dm); dB.rotation.y = Math.PI
-      g.add(dTop, dF, dB)
+      sp.add(dTop, dF, dB); g.add(sp)
       const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.29, 40), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.07; g.add(ring)
-      g.scale.setScalar(1.3); g.rotation.y = i * 2.4
-      g.visible = false; S.add(g); this.pickMs.push({ g, kinds, dm, dec: [dTop, dF, dB], ring })
+      // 遠くからも見える光の柱（地面から立ち上がり、上へ消える。役の色。加算で薄く）
+      const beam = new THREE.Mesh(this.beamGeo, new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false, fog: false })); beam.position.y = 0.05; beam.renderOrder = 3; g.add(beam)
+      g.scale.setScalar(2); g.rotation.y = 0
+      g.visible = false; S.add(g); this.pickMs.push({ g, sp, kinds, dm, dec: [dTop, dF, dB], ring, beam })
     }
     // 人の入れ物（10人ぶん）
     // 空き車のそばの矢印
@@ -505,17 +518,18 @@ export class Stage {
       o.g.visible = p.t <= 0
       if (p.t > 0) return
       const y = H(p.x, p.z)
-      o.g.position.set(p.x, y, p.z); o.g.scale.setScalar(p.center ? 2.1 : 1.3)
+      o.g.position.set(p.x, y, p.z); o.g.scale.setScalar(p.center ? 2.8 : 2.0)
+      o.sp.position.y = 0.55 + Math.sin(this.time * 2 + i) * 0.1; o.sp.rotation.y = this.time * 0.8 + i * 2.4
       if (o.type !== p.type) {
         o.type = p.type; const role = ROLE_G.has(p.type) ? 'gunner' : p.type === 'repair' ? 'repair' : 'driver'
         for (const k in o.kinds) o.kinds[k].visible = k === role
-        o.dm.map = this.pickIcons[p.type]; o.dm.needsUpdate = true; o.ring.material.color.setHex(PICKC[p.type])
+        o.dm.map = this.pickIcons[p.type]; o.dm.needsUpdate = true; o.ring.material.color.setHex(PICKC[p.type]); o.beam.material.color.setHex(PICKC[p.type])
         const d = decalPlace(role), [dT, dF, dB] = o.dec
         dT.position.set(d.x, d.topY, 0); dT.scale.set(d.s, d.s, 1)
         dF.position.set(d.x, d.faceY, d.faceZ); dF.scale.set(d.s, d.s, 1)
         dB.position.set(-d.x, d.faceY, -d.faceZ); dB.scale.set(d.s, d.s, 1)
       }
-      o.ring.material.opacity = (p.center ? 0.5 : 0.34) + Math.sin(this.time * (p.center ? 4 : 3) + i) * 0.1
+      o.ring.material.opacity = (p.center ? 0.7 : 0.55) + Math.sin(this.time * (p.center ? 4 : 3) + i) * 0.12; o.beam.material.opacity = 0.34 + Math.sin(this.time * 2.4 + i * 1.7) * 0.08
     })
     // タレット
     S.turrets.forEach((t, i) => { const o = this.turretMs[i]; if (!o) return; o.g.visible = true; o.g.position.set(t.x, t.y, t.z); o.head.rotation.y = t.yaw; const k = Math.min(1, t.life / 1.2, (18 - t.life) / 0.4 + 0.1); o.g.scale.setScalar(Math.max(0.05, k)) })

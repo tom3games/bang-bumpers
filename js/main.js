@@ -1,25 +1,25 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF } from './sim.js?v=5'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=5'
-import { EngineMix } from './engine.js?v=5'
-import { makeInputs } from './cpu.js?v=5'
-import { Stage } from './stage.js?v=5'
-import { loadPeople } from './people.js?v=5'
-import { loadCars } from './cars.js?v=5'
-import { H, WORLD, BOXES, POLES, BOWL, RAMPS, SPARE_SPOTS } from './arena.js?v=5'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=6'
+import { cleanName, cpuNames, NAME_MAX } from './names.js?v=6'
+import { EngineMix } from './engine.js?v=6'
+import { makeInputs } from './cpu.js?v=6'
+import { Stage } from './stage.js?v=6'
+import { loadPeople } from './people.js?v=6'
+import { loadCars } from './cars.js?v=6'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=6'
 
 const Q = new URLSearchParams(location.search)
 const EN = Q.get('lang') === 'en'
 const L = (ja, en) => EN ? en : ja
 const $ = id => document.getElementById(id)
 const hex = h => '#' + h.toString(16).padStart(6, '0')
-const TEAM_EN = ['Red', 'Blue', 'Yellow', 'Green', 'Pink']
+const TEAM_EN = ['Red', 'Blue', 'Yellow', 'Green', 'Pink', 'White']
 let TN = ['あなた', ...TEAM_NAMES.slice(1)]
 const tname = i => EN && i > 0 ? TEAM_EN[i] : TN[i] || TEAM_NAMES[i]
 const touchy = (('ontouchstart' in window) && matchMedia('(pointer:coarse)').matches) || Q.get('touch') === '1'
 if (touchy && Q.get('touch') !== '0') document.body.classList.add('touch')
-if (EN) { document.documentElement.lang = 'en'; document.title = 'BANG BUMPERS | 2-per-car, 10-player car combat - free browser game'; for (const el of document.querySelectorAll('[data-en]')) { el.innerHTML = el.dataset.en } for (const b of document.querySelectorAll('[data-en-label]')) b.setAttribute('aria-label', b.dataset.enLabel); $('btnAgain').textContent = 'Play again'; $('btnPost').textContent = 'Post on X'; $('langT').textContent = 'JA' }
+if (EN) { document.documentElement.lang = 'en'; document.title = 'BANG BUMPERS | 2-per-car, 12-player car combat - free browser game'; for (const el of document.querySelectorAll('[data-en]')) { el.innerHTML = el.dataset.en } for (const b of document.querySelectorAll('[data-en-label]')) b.setAttribute('aria-label', b.dataset.enLabel); $('btnAgain').textContent = 'Play again'; $('btnPost').textContent = 'Post on X'; $('langT').textContent = 'JA' }
 const low = touchy || Math.min(innerWidth, innerHeight) < 600 || Q.get('low') === '1'
 
 // ------------------------------------------------------------ 音
@@ -45,9 +45,13 @@ const playSnd = (name, o = {}) => { if ((o.vol ?? 1) < 0.035) return; const now 
 const stage = new Stage($('view'), { low, preserve: Q.get('shot') === '1' })
 stage.snd = playSnd
 addEventListener('resize', () => stage.resize())
+if (window.visualViewport) visualViewport.addEventListener('resize', () => { stage.resize(); sizeWind() })
+addEventListener('orientationchange', () => setTimeout(() => { stage.resize(); sizeWind() }, 200))
 const seedBase = +(Q.get('seed') || (Date.now() % 100000))
 let S = createState(seedBase, { humanTeam: -1, noCountdown: true })
 let phase = 'title', human = false, matchNo = 0
+let gameMode = Q.get('mode') === 'points' ? 'points' : Q.get('mode') === 'stock' ? 'stock' : 'stock'
+try { if (!Q.get('mode')) { const m = localStorage.getItem('bb_mode'); if (m === 'points' || m === 'stock') gameMode = m } } catch (e) {}
 let acc = 0, last = performance.now(), simSpeed = Math.max(1, Math.min(12, +(Q.get('speed') || 1)))
 let aimYaw = 0, snapCam = true, resultAt = 0, shownResult = false, matchStart = 0, msgT = 0
 const K = { keys: {}, gas: false, back: false, L: false, R: false, boost: false, hb: false, fire: false, reload: false, use: false, swap: false, wswap: false, mx: 0, mouseDown: false, stick: null, touches: new Map(), autoCPU: Q.get('auto') === '1' }
@@ -224,9 +228,9 @@ try { const v = localStorage.getItem('bb_name'); if (v) $('pName').value = clean
 
 function startMatch(role) {
   matchNo++
-  S = createState(seedBase + matchNo * 977, { humanTeam: 0, prepSec: +(Q.get('prep') || 10) })
+  S = createState(seedBase + matchNo * 977, { humanTeam: 0, prepSec: +(Q.get('prep') || 10), mode: gameMode })
   S.teams[0].driver = role === 'drive' ? 0 : 1
-  TN = [cleanName($('pName').value, 0) && $('pName').value.trim() ? cleanName($('pName').value, 0) : L('あなた', 'You'), ...cpuNames(S.rng, 4)]
+  TN = [cleanName($('pName').value, 0) && $('pName').value.trim() ? cleanName($('pName').value, 0) : L('あなた', 'You'), ...cpuNames(S.rng, NTEAM - 1)]
   stage.clearDynamic(); human = true
   const c = S.cars.find(q => q.team === 0); aimYaw = c.yaw; snapCam = true
   phase = 'prep'; shownResult = false; resultAt = 0
@@ -248,6 +252,9 @@ function toTitle() {
   $('title').hidden = false; $('result').hidden = true; $('hud').hidden = true
   engine.clear(); bgm(0.26)
 }
+function setMode(m) { gameMode = m; try { localStorage.setItem('bb_mode', m) } catch (e) {} document.querySelectorAll('#modes .mode').forEach(b => { const on = b.dataset.m === m; b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on) }) }
+document.querySelectorAll('#modes .mode').forEach(b => b.addEventListener('click', () => { setMode(b.dataset.m); playSnd('switch', { vol: 0.5 }) }))
+setMode(gameMode)
 $('goDrive').addEventListener('click', () => startMatch('drive'))
 $('goShoot').addEventListener('click', () => startMatch('shoot'))
 $('btnAgain').addEventListener('click', () => { startMatch(lastPickRole) })
@@ -257,19 +264,21 @@ let lastPickRole = 'drive'
 for (const [id, r] of [['goDrive', 'drive'], ['goShoot', 'shoot']]) $(id).addEventListener('click', () => { lastPickRole = r })
 $('btnPost').addEventListener('click', () => {
   const rk = $('rkN').textContent, t = { kills: lastKills }
-  const txt = L(`BANG BUMPERS で${rk}位。撃破${t.kills}。2人1組で車をぶつけて撃つ10人バトル`, `Finished #${rk} in BANG BUMPERS with ${t.kills} KOs. Drive and shoot, 2 per car, 10 players.`)
+  const txt = L(`BANG BUMPERS で${rk}位。撃破${t.kills}。2人1組で車をぶつけて撃つ12人バトル`, `Finished #${rk} in BANG BUMPERS with ${t.kills} KOs. Drive and shoot, 2 per car, 12 players.`)
   window.open('https://x.com/intent/post?text=' + encodeURIComponent(txt + '\n#BANGBUMPERS') + '&url=' + encodeURIComponent('https://tom3games.github.io/bang-bumpers/'), '_blank')
 })
 function showResult(rank) {
   if (shownResult) return; shownResult = true
   const t = S.teams[0], st = t.stats
   lastKills = t.kills; $('rkN').textContent = rank; $('rkU').textContent = L('位', rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th')
-  const V = [['最後まで走りきった', 'Last one rolling'], ['あと一歩で頂点だった', 'One hit from the top'], ['ボロボロだけど生きていた', 'Dented but alive'], ['早めに放り出された', 'Thrown out early'], ['最初の被害者になった', 'First one to go']][rank - 1]
-  { const sc = id => S.teams[id].stock * 2 + S.teams[id].kills, lead = S.ranking.length ? S.ranking[0] : -1
+  const V = (S.mode === 'points'
+    ? [['いちばん撃破を稼いだ', 'Top scorer'], ['あと1点で頂点だった', 'One point from the top'], ['しぶとく稼いだ', 'Kept scoring'], ['まずまず走り回った', 'Held your own'], ['もう少し当てたい', 'Needs more hits'], ['次は当てにいこう', 'Aim for the next one']]
+    : [['最後まで走りきった', 'Last one rolling'], ['あと一歩で頂点だった', 'One hit from the top'], ['ボロボロだけど生きていた', 'Dented but alive'], ['早めに脱落した', 'Out early'], ['先に脱落した', 'Went down first'], ['最初の被害者になった', 'First one to go']])[Math.min(5, rank - 1)].slice()
+  if (S.mode === 'stock') { const sc = id => S.teams[id].stock * 2 + S.teams[id].kills, lead = S.ranking.length ? S.ranking[0] : -1
     if (rank === 2 && lead >= 0 && (sc(0) < sc(lead) - 1 || S.teams[0].kills === 0)) V[0] = 'しぶとく最後まで残った', V[1] = 'Hung on to the end' }
   $('rkV').textContent = L(...V)
-  const order = S.ranking.length ? S.ranking : [...S.teams].sort((a, b) => (b.out ? -1000 + b.outT : 1000 + b.stock * 100 + b.kills * 3) - (a.out ? -1000 + a.outT : 1000 + a.stock * 100 + a.kills * 3)).map(x => x.id)
-  $('rkList').innerHTML = order.map((id, i) => { const tm = S.teams[id]; return `<li class="${id === 0 ? 'me' : ''}" style="--tc:${hex(TEAM_COLORS[id])}"><b>${i + 1}</b><i></i><span>${tname(id)}${id === 0 && tname(0) !== L('あなた', 'You') ? L('（あなた）', ' (you)') : ''}</span><em>${tm.kills} ${L('撃破', 'KO')}</em></li>` }).join('')
+  const order = S.ranking.length ? S.ranking : [...S.teams].sort((a, b) => scoreKey(S, b) - scoreKey(S, a)).map(x => x.id)
+  $('rkList').innerHTML = order.map((id, i) => { const tm = S.teams[id]; return `<li class="${id === 0 ? 'me' : ''}" style="--tc:${hex(TEAM_COLORS[id])}"><b>${i + 1}</b><i></i><span>${tname(id)}${id === 0 && tname(0) !== L('あなた', 'You') ? L('（あなた）', ' (you)') : ''}</span><em>${tm.kills} ${S.mode === 'points' ? L('点', 'pt') : L('撃破', 'KO')}</em></li>` }).join('')
   const acc = st.shots ? Math.round(st.hits / st.shots * 100) : 0
   $('rkSt').textContent = L(`撃った ${st.shots} 発・当たった ${st.hits} 発（${acc}%）・体当たり ${st.rams} 回・拾った物 ${st.pick} 個`, `Shots ${st.shots} · hits ${st.hits} (${acc}%) · rams ${st.rams} · pickups ${st.pick}`)
   $('result').classList.toggle('win', rank === 1)
@@ -295,15 +304,17 @@ function onEvents() {
     if (!human) continue
     switch (e.k) {
       case 'count': if (phase === 'prep') { const pc = $('pcount'); pc.firstElementChild.textContent = e.n; pc.classList.toggle('low', e.n <= 3); playSnd('tick', { vol: e.n <= 3 ? 0.9 : 0.35, rate: e.n <= 3 ? 1.4 : 1 }) } break
-      case 'go': if (phase === 'prep') toPlay(); say('GO!', false, 900); playSnd('horn', { vol: 0.5, rate: 1.4 }); break
+      case 'ready': if (phase === 'prep') toPlay(); break
+      case 'go321': say(String(e.n), false, 900); playSnd('tick', { vol: 0.9, rate: e.n === 1 ? 1.7 : 1.4 }); break
+      case 'go': say('GO!', false, 900); playSnd('horn', { vol: 0.5, rate: 1.4 }); break
       case 'kill': {
         const v = tname(e.victim), me = e.victim === 0, byMe = e.by === 0
-        const how = e.how === 'foot' ? L('（歩き）', ' (on foot)') : ''
+        const how = e.how === 'foot' ? L('（走っている所を）', ' (on foot)') : ''
         const txt = e.by == null ? L(`<b style="color:${hex(TEAM_COLORS[e.victim])}">${v}</b> が自爆${how}`, `<b style="color:${hex(TEAM_COLORS[e.victim])}">${v}</b> blew up${how}`)
           : L(`<b style="color:${hex(TEAM_COLORS[e.by])}">${tname(e.by)}</b> が <b style="color:${hex(TEAM_COLORS[e.victim])}">${v}</b> を撃破${how}`, `<b style="color:${hex(TEAM_COLORS[e.by])}">${tname(e.by)}</b> wrecked <b style="color:${hex(TEAM_COLORS[e.victim])}">${v}</b>${how}`)
         feed(txt, byMe ? TEAM_COLORS[0] : TEAM_COLORS[e.victim])
         if (byMe) say(L('撃破！', 'WRECKED!'), true, 1100)
-        else if (me) { const t = S.teams[0]; if (!t.out) say(L('壊された', 'WRECKED'), true, 1400, L('灰色の空き車まで走れ', 'Run to a grey spare car')) }
+        else if (me) { const t = S.teams[0]; if (!t.out) say(e.how === 'foot' ? L('やられた', 'DOWN') : L('大破', 'WRECKED'), true, 1400, e.how === 'foot' ? L('もうすぐ再スタート', 'Back in a moment') : L(`${RESPAWN_SEC}秒で再スタート。走って逃げろ`, `Restart in ${RESPAWN_SEC}s. Run and hide`)) }
         break
       }
       case 'out': { feed(L(`<b style="color:${hex(TEAM_COLORS[e.team])}">${tname(e.team)}</b> 脱落`, `<b style="color:${hex(TEAM_COLORS[e.team])}">${tname(e.team)}</b> is out`), TEAM_COLORS[e.team]); if (e.team === 0) { resultAt = S.t + 2.4; say(L('脱落', 'OUT'), false, 2200) } break }
@@ -312,7 +323,8 @@ function onEvents() {
       case 'repair': if (e.team === 0) say(L('修理', 'REPAIR'), true, 900); break
       case 'flash': { const mc = myTeam() && myTeam().car >= 0 ? S.cars.find(q => q.id === myTeam().car) : null; if (mc && mc.flashT > 0.3) { Snd.muffle(Math.min(2.2, mc.flashT * 0.8)); playSnd('bell', { vol: 0.16, rate: 3.2 }) } break }
       case 'overheat': if (e.team === 0) say(L('熱い！', 'OVERHEAT'), true, 900); break
-      case 'board': if (e.team === 0) { say(L('復活', 'BACK IN'), true, 1000); const c = S.cars.find(q => q.id === e.id); if (c) { aimYaw = c.yaw; snapCam = true } } break
+      case 'respawn': if (e.team === 0) { say(L('再スタート', 'BACK IN'), true, 1000); const c = S.cars.find(q => q.id === e.id); if (c) { aimYaw = c.yaw; snapCam = true; K.use = false } } break
+      case 'centerRepair': feed(L('真ん中に修理箱が出た', 'A repair box appeared in the center'), 0x43d17a); playSnd('bell', { vol: 0.3, rate: 1.6 }); break
     }
   }
   S.events.length = 0
@@ -321,30 +333,28 @@ function onEvents() {
 // ------------------------------------------------------------ HUD
 let boardCache = '', hintT = 0, hintShown = {}
 function updateBoard() {
-  const order = [...S.teams].sort((a, b) => (b.out ? -1000 + b.outT : 1000 + b.stock * 100 + b.kills * 3) - (a.out ? -1000 + a.outT : 1000 + a.stock * 100 + a.kills * 3))
-  const key = order.map(t => `${t.id}${t.stock}${t.kills}${t.out ? 1 : 0}${tname(t.id)}`).join(',')
+  const order = [...S.teams].sort((a, b) => scoreKey(S, b) - scoreKey(S, a))
+  const key = S.mode + order.map(t => `${t.id}${t.stock}${t.kills}${t.out ? 1 : 0}${tname(t.id)}`).join(',')
   if (key === boardCache) return; boardCache = key
-  $('board').innerHTML = order.map(t => { let pips = ''; for (let i = 0; i < STOCK; i++) pips += `<u class="${i < t.stock ? '' : 'x'}"></u>`; return `<li class="${t.id === 0 ? 'me' : ''} ${t.out ? 'out' : ''}" style="--tc:${hex(TEAM_COLORS[t.id])}"><i></i><em>${[...tname(t.id)].slice(0, 6).join('')}</em><span class="st">${pips}</span><span class="k">${t.kills}</span></li>` }).join('')
+  $('board').innerHTML = order.map(t => { let pips = ''; if (S.mode === 'stock') for (let i = 0; i < STOCK; i++) pips += `<u class="${i < t.stock ? '' : 'x'}"></u>`; return `<li class="${t.id === 0 ? 'me' : ''} ${t.out ? 'out' : ''}" style="--tc:${hex(TEAM_COLORS[t.id])}"><i></i><em>${[...tname(t.id)].slice(0, 6).join('')}</em><span class="st">${pips}</span><span class="k">${t.kills}</span></li>` }).join('')
 }
 const radar = $('radar').getContext('2d')
 function drawRadar(cx, cz, yaw) {
-  const g = radar, W = 184, R = 92, sc = R / 80
+  const g = radar, W = 184, R = 92, sc = R / 100
   g.clearRect(0, 0, W, W); g.save(); g.beginPath(); g.arc(R, R, R - 3, 0, 7); g.clip()
   g.translate(R, R); g.rotate(yaw + Math.PI) // 進行方向が上
   g.scale(sc, sc); g.translate(-cx, -cz)
   g.fillStyle = 'rgba(52,54,58,.95)'; g.beginPath(); g.arc(0, 0, WORLD, 0, 7); g.fill()
   g.strokeStyle = 'rgba(200,196,186,.8)'; g.lineWidth = 1.6; g.beginPath(); g.arc(0, 0, WORLD - 1, 0, 7); g.stroke()
-  g.fillStyle = 'rgba(24,25,27,.7)'; g.beginPath(); g.arc(BOWL.x, BOWL.z, BOWL.r, 0, 7); g.fill()
   g.fillStyle = 'rgba(190,185,172,.85)'
   for (const o of POLES) { g.beginPath(); g.arc(o.x, o.z, Math.max(1.4, o.r), 0, 7); g.fill() }
   for (const o of BOXES) g.fillRect(o.x - o.w / 2, o.z - o.d / 2, o.w, o.d)
   g.fillStyle = 'rgba(206,168,50,.9)'
-  for (const p of RAMPS) { g.save(); g.translate(p.x, p.z); g.rotate(-p.ang); g.fillRect(-p.w / 2, 0, p.w, p.len); g.restore() }
+  for (const p of RAMPS) { g.beginPath(); g.arc(p.x, p.z, p.r0 * 0.8, 0, 7); g.fill() }
   g.restore()
   g.save(); g.beginPath(); g.arc(R, R, R - 3, 0, 7); g.clip(); g.translate(R, R); g.rotate(yaw + Math.PI); g.scale(sc, sc); g.translate(-cx, -cz)
-  for (const p of S.pickups) if (p.t <= 0) { g.fillStyle = p.type === 'repair' ? '#43d17a' : ITEMS[p.type] && ITEMS[p.type].role === 'G' ? '#37c3ea' : '#f5a23a'; g.save(); g.translate(p.x, p.z); g.rotate(.785); g.fillRect(-1.3, -1.3, 2.6, 2.6); g.restore() }
+  for (const p of S.pickups) if (p.t <= 0) { g.fillStyle = p.center ? '#43d17a' : p.type === 'repair' ? '#43d17a' : ITEMS[p.type] && ITEMS[p.type].role === 'G' ? '#37c3ea' : '#f5a23a'; g.save(); g.translate(p.x, p.z); g.rotate(.785); const q = p.center ? 2.6 : 1.3; g.fillRect(-q, -q, q * 2, q * 2); g.restore() }
   for (const c of S.cars) {
-    if (c.team < 0 && c.alive) { g.fillStyle = '#f2c230'; g.fillRect(c.x - 2, c.z - 2, 4, 4); continue }
     if (!c.alive) { g.fillStyle = 'rgba(20,20,20,.9)'; g.fillRect(c.x - 1.5, c.z - 1.5, 3, 3); continue }
     g.save(); g.translate(c.x, c.z); g.rotate(-c.yaw); g.fillStyle = hex(TEAM_COLORS[c.team]); g.strokeStyle = c.team === 0 ? '#fff' : 'rgba(0,0,0,.7)'; g.lineWidth = c.team === 0 ? 1.2 : 0.8
     g.beginPath(); g.moveTo(0, 3.6); g.lineTo(2.4, -2.4); g.lineTo(-2.4, -2.4); g.closePath(); g.fill(); g.stroke(); g.restore()
@@ -356,7 +366,7 @@ const marks = []
 function mark(i) { if (marks[i]) return marks[i]; const d = document.createElement('div'); d.className = 'mk'; d.innerHTML = '<span class="nm"></span><span class="hp"><u></u></span>'; $('marks').appendChild(d); return marks[i] = d }
 const _v = new THREE.Vector3()
 function updateMarks() {
-  let n = 0; const W = innerWidth, Hh = innerHeight, placed = []
+  let n = 0; const W = innerWidth, Hh = (window.visualViewport && visualViewport.height) || innerHeight, placed = []
   const place = (x, y, z, col, name, hp, spare) => {
     const d = mark(n++); d.style.display = ''; d.classList.toggle('spare', !!spare)
     _v.set(x, y, z).project(stage.cam)
@@ -373,7 +383,6 @@ function updateMarks() {
   const myc = myTeam() && myTeam().car >= 0 ? S.cars.find(q => q.id === myTeam().car) : null
   const ref = myc || (myTeam() && myTeam().p[0])
   for (const c of S.cars) {
-    if (c.team < 0 && c.alive && curRole() === 'walk' && ref) { const dd = Math.hypot(c.x - ref.x, c.z - ref.z); if (dd < 90) place(c.x, c.y + 3.6, c.z, '#f2c230', L('空き車', 'SPARE'), 100, true); continue }
     if (!c.alive || c.team < 0 || c.team === S.humanTeam) continue
     if (ref && S.smokes.some(m => Math.hypot(m.x - c.x, m.z - c.z) < m.r * 0.8)) continue   // 煙幕の中の車は名札が出ない
     place(c.x, c.y + 3.5, c.z, hex(TEAM_COLORS[c.team]), tname(c.team), Math.max(0, c.hp))
@@ -408,24 +417,26 @@ function updateHUD(dt) {
   $('cross').hidden = role !== 'shoot'; $('cross').classList.toggle('lock', lockedOn)
   // 相棒の札
   { const pt = $('partner'), drive = t.driver === 0 && !t.walking
-    if (c && !t.out) { pt.hidden = false; const pslot = drive ? t.iG : t.iD
+    if (c && !t.out && !drive) { pt.hidden = false; const pslot = drive ? t.iG : t.iD
       $('ptName').textContent = drive ? L('相棒 射手', 'Partner: shooter') : L('相棒 運転', 'Partner: driver')
       $('ptInfo').textContent = drive ? L(WEAPON_NOTE[t.ws[t.wSel].id][0], WEAPONS[t.ws[t.wSel].id].name) : L(CAR_TYPES[c.type].name, CAR_NAME_EN[c.type])
       pt.classList.toggle('has', !!pslot); pt.style.setProperty('--ic', drive ? 'var(--gun)' : 'var(--drv)'); pt.style.setProperty('--pc2', drive ? 'var(--gun)' : 'var(--drv)') } else pt.hidden = true }
   // ヒント
   let hint = ''
   if (S.phase === 'play') {
-    if (role === 'walk') hint = touchy ? L('黄色い印の空き車まで走れ', 'Run to the spare car') : L('黄色い印の空き車まで走れ（近づくと乗れる）', 'Run to the marked spare car')
+    if (role === 'walk') hint = t.footDead ? L('倒された。再スタートを待て', 'Down. Wait for the restart') : L('逃げ回れ。倒されると相手に1点', 'Run! If you go down, they score')
     else if (role === 'drive') hint = S.tMatch < 14 ? (touchy ? L('ペダルで進み、横腹にぶつけろ', 'Pedal to go, hit their sides') : L('W 進む・A D ハンドル・Space ドリフト', 'W go · A D steer · Space drift')) : (c && c.hp < 40 ? L('壊れそう。緑の箱で直せる', 'Almost dead. Find a repair box') : '')
     else if (role === 'shoot') hint = S.tMatch < 14 ? (touchy ? L('なぞって向き、大ボタンで撃つ', 'Drag to aim, big button fires') : L(document.pointerLockElement ? 'マウスで向き・クリックで撃つ' : '画面をクリックしてマウス固定・クリックで撃つ', document.pointerLockElement ? 'Mouse to aim · click to fire' : 'Click to lock the mouse, click to fire')) : (t.ws && t.ws[t.wSel] && t.ws[t.wSel].overT > 0 ? L('熱い！冷めるまで待て', 'Overheated') : '')
   }
+  { const rs = $('resp'), walking = role === 'walk' && S.phase === 'play'
+    rs.hidden = !walking; if (walking) { rs.firstElementChild.textContent = t.footDead ? '×' : Math.max(1, Math.ceil(t.respT)); rs.lastElementChild.textContent = t.footDead ? L('倒された', 'DOWN') : L('秒で再スタート', 's to restart'); rs.classList.toggle('dead', !!t.footDead) } }
   $('hint').textContent = hint
   if (msgT && performance.now() > msgT) { $('msg').textContent = ''; $('msg').className = ''; msgT = 0 }
 }
 
 // ------------------------------------------------------------ 疾走感: 画面のふちを流れる線とブーストの縁（最高速は変えない）
 const windC = $('wind'), wg = windC.getContext('2d')
-function sizeWind() { windC.width = innerWidth; windC.height = innerHeight }
+function sizeWind() { windC.width = innerWidth; windC.height = (window.visualViewport && visualViewport.height) || innerHeight }
 sizeWind(); addEventListener('resize', sizeWind)
 let windOn = false
 function drawWind(k, boost, on) {

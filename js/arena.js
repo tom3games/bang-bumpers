@@ -1,39 +1,34 @@
-// 円形のアリーナ（半径100m）。形と高さの定義（sim と view の両方が読む。THREE にも DOM にも依存しない）
-export const WORLD = 100          // 外周の壁までの半径
+// 円形のアリーナ（半径120m）。形と高さの定義（sim と view の両方が読む。THREE にも DOM にも依存しない）
+export const WORLD = 120          // 外周の壁までの半径
 export const HALF = WORLD
-export const BOWL = { x: 0, z: 0, r: 15, depth: 3.2 }
-// 坂とジャンプ台: (x,z) が低い端、ang の向き(sin,cos)へ len だけ登って、その先は切り立った崖。形をばらけさせてある
-const aimC = (x, z) => Math.atan2(-x, -z)     // 中央を向く角
+export const NTEAM = 6
+// ジャンプ台: 円錐台（どの向きからも登れる）。中心(x,z)・裾の半径 r0・平らな上面の半径 r1・高さ h。崖は無く、全周がなだらかな斜面
 export const RAMPS = [
-  { x: -62, z: -26, ang: Math.PI / 2, len: 20, w: 10, h: 3.0, kind: 'long' },       // 長いゆるい台
-  { x: 36, z: 42, ang: aimC(36, 42), len: 8, w: 7, h: 3.8, kind: 'steep' },          // 短くて急な台
-  { x: 0, z: -80, ang: 0, len: 14, w: 18, h: 3.6, kind: 'wide' },                    // 幅の広い台
-  { x: 76, z: -8, ang: -Math.PI / 2, len: 9, w: 8, h: 2.0, kind: 'step1' },          // 2段の台（1段目）
-  { x: 56, z: -8, ang: -Math.PI / 2, len: 9, w: 8, h: 3.6, kind: 'step2' },          // 2段目（少し先）
-  { x: -26, z: 66, ang: aimC(-26, 66), len: 12, w: 9, h: 3.2, kind: 'mid' },
+  { x: -80, z: -34, r0: 14, r1: 5, h: 3.4, kind: 'big' },
+  { x: 50, z: 58, r0: 10, r1: 3.6, h: 2.8, kind: 'small' },
+  { x: 0, z: -108, r0: 13, r1: 4.5, h: 3.2, kind: 'big' },
+  { x: 104, z: -12, r0: 11, r1: 4, h: 2.8, kind: 'mid' },
+  { x: -36, z: 92, r0: 11, r1: 4, h: 3.0, kind: 'mid' },
+  { x: 26, z: -22, r0: 9, r1: 3.4, h: 2.4, kind: 'small' },
 ]
 // 柱（円）。top は十分高い。kind: pillar コンクリの柱 / tires タイヤの山
 export const POLES = []
-for (let i = 0; i < 6; i++) { const a = (i * 60 + 18) * Math.PI / 180; POLES.push({ x: Math.sin(a) * 46, z: Math.cos(a) * 46, r: 1.6, h: 11, kind: 'pillar' }) }
-for (const [x, z] of [[-90, 10], [-88, 16], [88, -30], [90, -24], [20, 91], [26, 90], [-30, -88], [-36, -86]]) POLES.push({ x, z, r: 1.0, h: 1.8, kind: 'tires' })
+for (let i = 0; i < 6; i++) { const a = (i * 60 + 18) * Math.PI / 180; POLES.push({ x: Math.sin(a) * 56, z: Math.cos(a) * 56, r: 1.6, h: 11, kind: 'pillar' }) }
+for (const [x, z] of [[-108, 12], [-106, 19], [106, -36], [108, -29], [24, 109], [31, 108], [-36, -106], [-43, -103]]) POLES.push({ x, z, r: 1.0, h: 1.8, kind: 'tires' })
 // 箱（軸に沿った直方体）。バリアは数か所だけ
 export const BOXES = [
-  { x: 70, z: 32, w: 1.4, d: 10, h: 1.2, kind: 'barrier' }, { x: -72, z: 40, w: 1.4, d: 10, h: 1.2, kind: 'barrier' },
-  { x: 38, z: -62, w: 10, d: 1.4, h: 1.2, kind: 'barrier' }, { x: -46, z: 72, w: 10, d: 1.4, h: 1.2, kind: 'barrier' },
+  { x: 84, z: 38, w: 1.4, d: 10, h: 1.2, kind: 'barrier' }, { x: -86, z: 48, w: 1.4, d: 10, h: 1.2, kind: 'barrier' },
+  { x: 46, z: -74, w: 10, d: 1.4, h: 1.2, kind: 'barrier' }, { x: -55, z: 86, w: 10, d: 1.4, h: 1.2, kind: 'barrier' },
 ]
 export const DOORS = { S: [], E: [], W: [] }
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v
-export function bowlH(x, z) {
-  const dx = x - BOWL.x, dz = z - BOWL.z, r2 = dx * dx + dz * dz
-  return r2 < BOWL.r * BOWL.r ? -BOWL.depth * (0.5 + 0.5 * Math.cos(Math.PI * Math.sqrt(r2) / BOWL.r)) : 0
+export function rampH(p, x, z) {
+  const d = Math.hypot(x - p.x, z - p.z); if (d >= p.r0) return 0
+  return p.h * (d <= p.r1 ? 1 : (p.r0 - d) / (p.r0 - p.r1))
 }
 export function H(x, z) {
-  let h = bowlH(x, z)
-  for (const p of RAMPS) {
-    const ex = x - p.x, ez = z - p.z, s = Math.sin(p.ang), c = Math.cos(p.ang)
-    const u = ex * s + ez * c, v = ex * c - ez * s
-    if (u >= 0 && u <= p.len && Math.abs(v) <= p.w / 2) { const hh = p.h * u / p.len; if (hh > h) h = hh }
-  }
+  let h = 0
+  for (const p of RAMPS) { if (Math.abs(x - p.x) < p.r0 && Math.abs(z - p.z) < p.r0) { const hh = rampH(p, x, z); if (hh > h) h = hh } }
   return h
 }
 for (const o of POLES) { o.base = H(o.x, o.z); o.top = o.base + o.h }
@@ -97,9 +92,9 @@ export function freeSpot(x, z, r = 3.2) {
   }
   return { x, z }
 }
-// 出発地点: 外側の輪に5チーム（中央を向く）。空き車と拾い物は輪ごとにばらまく
-export const TEAM_SPAWNS = [0, 1, 2, 3, 4].map(i => { const a = i * 2 * Math.PI / 5 + 0.3; const p = freeSpot(74 * Math.sin(a), 74 * Math.cos(a), 4.5); return { x: p.x, z: p.z, yaw: Math.atan2(-p.x, -p.z) } })
+// 出発地点: 外側の輪に6チーム（中央を向く）
+export const TEAM_SPAWNS = Array.from({ length: NTEAM }, (_, i) => { const a = i * 2 * Math.PI / NTEAM + 0.3; const p = freeSpot(90 * Math.sin(a), 90 * Math.cos(a), 4.5); return { x: p.x, z: p.z, yaw: Math.atan2(-p.x, -p.z) } })
 const ring = (r, n, a0) => Array.from({ length: n }, (_, i) => { const a = a0 + i * 2 * Math.PI / n; return [Math.sin(a) * r, Math.cos(a) * r] })
-export const SPARE_SPOTS = [...ring(88, 5, 0.9), ...ring(56, 3, 2.1)].map(([x, z]) => { const p = freeSpot(x, z, 3.6); return { x: p.x, z: p.z, yaw: Math.atan2(-p.x, -p.z) + 1.2 } })
-for (const s of SPARE_SPOTS) for (const t of TEAM_SPAWNS) if (Math.hypot(s.x - t.x, s.z - t.z) < 18) { const p = freeSpot(s.x * 0.8, s.z * 0.8, 3.6); s.x = p.x; s.z = p.z }
-export const PICKUP_SPOTS = [[7, 5], [-7, -5], ...ring(30, 4, 0.4), ...ring(60, 6, 1.1), ...ring(86, 4, 2.0)].map(([x, z]) => { const p = freeSpot(x, z, 2.4); return { x: p.x, z: p.z } })
+export const PICKUP_SPOTS = [...ring(24, 3, 0.4), ...ring(44, 5, 1.1), ...ring(72, 6, 0.2), ...ring(104, 5, 2.0)].map(([x, z]) => { const p = freeSpot(x, z, 2.4); return { x: p.x, z: p.z } })
+// ステージの真ん中: たまに耐久回復の箱が出る
+export const CENTER = { x: 0, z: 0 }

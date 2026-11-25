@@ -2,15 +2,19 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, TEAM_SPAWNS, SPARE_SPOTS, PICKUP_SPOTS, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=5'
+import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot } from './arena.js?v=6'
 
 export const DT = 1 / 60
 export const G = 24
-export const MATCH_SEC = 240
-export const COUNTDOWN = 10
+export const MATCH_SEC = 240        // 残機制の制限時間
+export const POINT_SEC = 180        // ポイント制の制限時間
+export const COUNTDOWN = 10         // 準備の秒数（そのあと 3・2・1・GO）
+export const GO_COUNT = 3
 export const STOCK = 3
-export const TEAM_NAMES = ['あか', 'あお', 'きいろ', 'みどり', 'もも']
-export const TEAM_COLORS = [0xa8392f, 0x2f5f9a, 0xb8962f, 0x3c7a4e, 0x8d4c85]
+export const RESPAWN_SEC = 5        // 大破してから再スタートまで（そのあいだ人が走り回る）
+export const MODES = ['stock', 'points']
+export const TEAM_NAMES = ['あか', 'あお', 'きいろ', 'みどり', 'もも', 'しろ']
+export const TEAM_COLORS = [0xa8392f, 0x2f5f9a, 0xb8962f, 0x3c7a4e, 0x8d4c85, 0xd6d2c4]
 export const CAR_R = 1.15, CAR_OFF = 0.95, CAR_H = 1.7
 export const MAXF = 21, MAXR = 8, BOOST_MAXF = 31
 // 銃（射手が2つ選んで持ち替える）
@@ -60,20 +64,22 @@ export function setLoadout(S, t, lo) {   // 準備のあいだに選び直せる
   const c = teamCar(S, t); if (c && S.phase !== 'play') c.type = lo.car
 }
 export function createState(seed = 1, opts = {}) {
+  const mode = opts.mode === 'points' ? 'points' : 'stock'
   const S = {
-    seed, rng: mulberry(seed), t: 0, tMatch: 0, T: opts.matchSec || MATCH_SEC, cd: opts.noCountdown ? 0 : (opts.prepSec ?? COUNTDOWN), over: false, overT: 0, phase: opts.noCountdown ? 'play' : 'prep', winner: -1,
-    teams: [], cars: [], people: [], bullets: [], mines: [], oils: [], smokes: [], turrets: [], pickups: [], respawns: [], events: [], humanTeam: opts.humanTeam ?? 0, ranking: [], outCount: 0, wrecks: 0,
+    seed, rng: mulberry(seed), t: 0, tMatch: 0, mode, T: opts.matchSec || (mode === 'points' ? POINT_SEC : MATCH_SEC), cd: opts.noCountdown ? 0 : (opts.prepSec ?? COUNTDOWN), over: false, overT: 0, phase: opts.noCountdown ? 'play' : 'prep', winner: -1,
+    go: 0, teams: [], cars: [], people: [], bullets: [], mines: [], oils: [], smokes: [], turrets: [], pickups: [], events: [], humanTeam: opts.humanTeam ?? 0, ranking: [], outCount: 0, wrecks: 0,
   }
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < NTEAM; i++) {
     const lo = randLoadout(S.rng)
     const sp = TEAM_SPAWNS[i], car = newCar(S, sp.x, sp.z, sp.yaw, i, lo.car); car.invT = 1
-    const tm = { id: i, name: TEAM_NAMES[i], color: TEAM_COLORS[i], stock: STOCK, kills: 0, out: false, outT: 0, car: car.id, driver: 0, iD: null, iG: null, ricT: 0, cd: 0, wSel: 0, ws: [], loadout: lo, swapReq: false, swapT: 0, footHp: 0, footLast: null, walking: false, stats: { shots: 0, hits: 0, rams: 0, pick: 0 }, p: [newPerson(i, 0), newPerson(i, 1)] }
+    const tm = { id: i, name: TEAM_NAMES[i], color: TEAM_COLORS[i], stock: STOCK, kills: 0, deaths: 0, out: false, outT: 0, car: car.id, driver: 0, iD: null, iG: null, ricT: 0, cd: 0, wSel: 0, ws: [], loadout: lo, swapReq: false, swapT: 0, footHp: 0, footLast: null, walking: false, respT: 0, footDead: false, stats: { shots: 0, hits: 0, rams: 0, pick: 0 }, p: [newPerson(i, 0), newPerson(i, 1)] }
     S.teams.push(tm); S.people.push(tm.p[0], tm.p[1]); setLoadout(S, tm, lo)
   }
-  SPARE_SPOTS.forEach((sp, i) => { const c = newCar(S, sp.x, sp.z, sp.yaw, -1, (S.rng() * CAR_TYPES.length) | 0); c.spot = i; c.hp = 100 })
   PICKUP_SPOTS.forEach((sp, i) => S.pickups.push({ x: sp.x, z: sp.z, type: pickType(S), t: 0, id: i }))
+  S.pickups.push({ x: CENTER.x, z: CENTER.z, type: 'repair', t: CENTER_FIRST, id: PICKUP_SPOTS.length, center: true })
   return S
 }
+export const CENTER_FIRST = 22, CENTER_GAP = [30, 48]
 const PICK_W = [['turbo', 2], ['spear', 2], ['oil', 2], ['mine', 2], ['repair', 3], ['grenade', 3], ['smoke', 2], ['ricochet', 2], ['turret', 2], ['flash', 2]]
 function pickType(S) { let r = S.rng() * 22, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return 'repair' }
 export const carById = (S, id) => S.cars.find(c => c.id === id)
@@ -90,8 +96,17 @@ export function step(S, inputs, dt = DT) {
   S.t += dt
   for (const c of S.cars) { c.px = c.x; c.py = c.y; c.pz = c.z; c.pyaw = c.yaw; c.pgun = c.gunYaw; c.ppitch = c.pitch; c.proll = c.roll }
   for (const p of S.people) { p.px = p.x; p.py = p.y; p.pz = p.z }
-  if (S.cd > 0) { S.cd -= dt; if (S.cd <= 0) { S.phase = 'play'; ev(S, { k: 'go' }) } else { const n = Math.ceil(S.cd); if (n !== S.lastCd) { S.lastCd = n; ev(S, { k: 'count', n }) } } }
-  if (S.phase === 'prep' && S.cd <= 0) S.phase = 'play'
+  // 準備（COUNTDOWN 秒）→ 3・2・1 → GO。3・2・1 のあいだはまだ動けない
+  if (S.phase === 'prep') {
+    S.cd -= dt
+    if (S.cd > 0) { const n = Math.ceil(S.cd); if (n !== S.lastCd) { S.lastCd = n; ev(S, { k: 'count', n }) } }
+    else { S.phase = 'ready'; S.go = GO_COUNT; S.lastGo = 0; ev(S, { k: 'ready' }) }
+  }
+  if (S.phase === 'ready') {
+    S.go -= dt
+    if (S.go > 0) { const n = Math.ceil(S.go); if (n !== S.lastGo) { S.lastGo = n; ev(S, { k: 'go321', n }) } }
+    else { S.phase = 'play'; S.go = 0; ev(S, { k: 'go' }) }
+  }
   const live = S.phase === 'play' && !S.over
   if (live) S.tMatch += dt
   const blank = {}
@@ -106,23 +121,31 @@ export function step(S, inputs, dt = DT) {
   updateMines(S, dt)
   updatePeople(S, inputs, dt, live)
   updatePickups(S, dt)
-  updateRespawns(S, dt)
+  cleanWrecks(S)
   // 壊れた車
   for (const c of S.cars) if (c.alive && c.hp <= 0) wreckCar(S, c)
-  for (const t of S.teams) if (!t.out && t.walking && t.footHp <= 0) footDeath(S, t)
-  // 決着
+  for (const t of S.teams) if (!t.out && t.walking && !t.footDead && t.footHp <= 0) footDeath(S, t)
+  // 再スタート（大破から RESPAWN_SEC 秒後）
+  if (live) for (const t of S.teams) if (!t.out && t.walking) { t.respT -= dt; if (t.respT <= 0) respawnTeam(S, t) }
+  // 決着: 残機制は最後の1チームか時間切れ、ポイント制は時間切れ
   if (live) {
     const alive = S.teams.filter(t => !t.out)
-    if (alive.length <= 1 || S.tMatch >= S.T) { if (!S.endAt) S.endAt = S.t + (alive.length <= 1 ? 2.4 : 0.4) }
+    const lastOne = S.mode === 'stock' && alive.length <= 1
+    if (lastOne || S.tMatch >= S.T) { if (!S.endAt) S.endAt = S.t + (lastOne ? 2.4 : 0.4) }
     if (S.endAt && S.t >= S.endAt) finish(S)
   }
   if (S.over) S.overT += dt
   return S
 }
 
+// 順位の点数。残機制: 脱落した順 → 残機 → 撃破。ポイント制: 撃破 → 少ない大破
+export function scoreKey(S, t) {
+  if (S.mode === 'points') return t.kills * 1000 - t.deaths * 10 + (teamCar(S, t)?.hp || 0) / 100
+  return t.out ? -1000 + t.outT : 1000 + t.stock * 100 + t.kills * 3 + (teamCar(S, t)?.hp || 0) / 100
+}
 function finish(S) {
   S.over = true; S.phase = 'over'
-  const key = t => t.out ? -1000 + t.outT : 1000 + t.stock * 100 + t.kills * 3 + (teamCar(S, t)?.hp || 0) / 100
+  const key = t => scoreKey(S, t)
   S.ranking = [...S.teams].sort((a, b) => key(b) - key(a)).map(t => t.id)
   S.winner = S.ranking[0]
   ev(S, { k: 'over', winner: S.winner })
@@ -329,8 +352,13 @@ function stepBody(S, c, dt, inp, boosting) {
   if (!c.air) {
     const hf = H(c.x + fx * 1.5, c.z + fz * 1.5), hb = H(c.x - fx * 1.5, c.z - fz * 1.5), hr = H(c.x + rx * 0.9, c.z + rz * 0.9), hl = H(c.x - rx * 0.9, c.z - rz * 0.9)
     tp = Math.atan2(hf - hb, 3); tr = Math.atan2(hr - hl, 1.8)
-    const k = Math.min(1, 12 * dt); c.pitch += (clamp(tp, -0.6, 0.6) - c.pitch) * k; c.roll += (clamp(tr, -0.5, 0.5) - c.roll) * k
+    const k = Math.min(1, 16 * dt); c.pitch += (clamp(tp, -0.6, 0.6) - c.pitch) * k; c.roll += (clamp(tr, -0.5, 0.5) - c.roll) * k
+    // 傾けても前後左右の端が地面に入る分だけ、見た目を持ち上げる（当たり判定の高さは変えない）
+    { const sp_ = Math.sin(c.pitch), sr_ = Math.sin(c.roll); let need = 0
+      for (const f of [-2.1, 2.1]) for (const l of [-0.95, 0.95]) need = Math.max(need, H(c.x + fx * f + rx * l, c.z + fz * f + rz * l) - (c.y + f * sp_ + l * sr_ + 0.12))
+      c.lift = Math.max(need, (c.lift || 0) - 3 * dt) }
   } else {
+    c.lift = Math.max(0, (c.lift || 0) - 3 * dt)
     const sp = c.vx * fx + c.vz * fz
     tp = Math.atan2(c.vy, Math.max(4, Math.abs(sp))); const k = Math.min(1, 3 * dt)
     c.pitch += (clamp(tp, -0.6, 0.6) - c.pitch) * k; c.roll += (0 - c.roll) * k
@@ -354,10 +382,10 @@ function stepBody(S, c, dt, inp, boosting) {
 }
 
 // ダメージ（車）。by は相手のチーム番号（null なら自爆）
-const HOW_K = { bullet: 0.33, ram: 0.41, rocket: 0.3, mine: 0.7 }
+const HOW_K = { bullet: 0.22, ram: 0.27, rocket: 0.2, mine: 0.46 }   // v6: 受けるダメージを約2/3に
 export function hurt(S, c, dmg, by, x, z, how) {
   if (!c.alive || dmg <= 0 || c.invT > 0 || S.phase !== 'play' || S.over) return 0
-  dmg *= (HOW_K[how] ?? 0.6) / (CAR_TYPES[c.type] || CAR_TYPES[0]).dur * (1 + clamp((S.tMatch - 120) / 240, 0, 0.6))
+  dmg *= (HOW_K[how] ?? 0.4) / (CAR_TYPES[c.type] || CAR_TYPES[0]).dur * (S.mode === 'stock' ? 1 + clamp((S.tMatch - 120) / 240, 0, 0.6) : 1)
   c.hp -= dmg; c.dmgFlash = 0.25
   if (by !== null && by !== undefined && by !== c.team) c.lastHit = { team: by, t: S.t }
   return dmg
@@ -572,33 +600,23 @@ function updateMines(S, dt) {
 // ---------------------------------------------------------------- 拾える物
 function updatePickups(S, dt) {
   for (const p of S.pickups) {
-    if (p.t > 0) { p.t -= dt; if (p.t <= 0) p.type = pickType(S); continue }
+    if (p.t > 0) { p.t -= dt; if (p.t <= 0) { if (p.center) ev(S, { k: 'centerRepair', x: p.x, y: H(p.x, p.z), z: p.z }); else p.type = pickType(S) } continue }
+    const R = p.center ? 3.4 : 2.6
     for (const c of S.cars) {
-      if (!c.alive || c.team < 0 || Math.hypot(c.x - p.x, c.z - p.z) > 2.6 || Math.abs(c.y - H(p.x, p.z)) > 2) continue
+      if (!c.alive || c.team < 0 || Math.hypot(c.x - p.x, c.z - p.z) > R || Math.abs(c.y - H(p.x, p.z)) > 2) continue
       const t = S.teams[c.team], IT = ITEMS[p.type]
-      if (p.type === 'repair') { const before = c.hp; c.hp = Math.min(100, c.hp + 45); ev(S, { k: 'repair', team: t.id, x: c.x, y: c.y, z: c.z, gain: c.hp - before }) }
+      if (p.type === 'repair') { const before = c.hp; c.hp = Math.min(100, c.hp + (p.center ? 70 : 45)); ev(S, { k: 'repair', team: t.id, x: c.x, y: c.y, z: c.z, gain: c.hp - before, center: !!p.center }) }
       else {
         const slot = IT.role === 'D' ? 'iD' : 'iG'
         if (t[slot] && t[slot].type === p.type) t[slot].ammo += IT.ammo; else t[slot] = { type: p.type, ammo: IT.ammo }
         ev(S, { k: 'pickup', team: t.id, type: p.type, role: IT.role, x: p.x, y: H(p.x, p.z), z: p.z })
       }
       t.stats.pick++
-      p.t = 16; break
+      p.t = p.center ? CENTER_GAP[0] + S.rng() * (CENTER_GAP[1] - CENTER_GAP[0]) : 16; break
     }
   }
 }
-function updateRespawns(S, dt) {
-  for (let i = S.respawns.length - 1; i >= 0; i--) {
-    const r = S.respawns[i]; r.t -= dt
-    if (r.t > 0) continue
-    const sp = SPARE_SPOTS[r.spot]
-    // 誰かが居座っていたら少し待つ
-    if (S.cars.some(c => Math.hypot(c.x - sp.x, c.z - sp.z) < 4 && c.team < 0 || (c.alive === false && Math.hypot(c.x - sp.x, c.z - sp.z) < 4) || (c.alive && Math.hypot(c.x - sp.x, c.z - sp.z) < 4))) { r.t = 2; continue }
-    const c = newCar(S, sp.x, sp.z, sp.yaw, -1); c.spot = r.spot; c.invT = 0
-    ev(S, { k: 'spare', x: sp.x, y: c.y, z: sp.z })
-    S.respawns.splice(i, 1)
-  }
-  // 古い壊れ車を片づける
+function cleanWrecks(S) {   // 古い壊れ車を片づける
   for (let i = S.cars.length - 1; i >= 0; i--) { const c = S.cars[i]; if (!c.alive && c.wreckT > 16) { ev(S, { k: 'vanish', x: c.x, y: c.y, z: c.z, id: c.id }); S.cars.splice(i, 1) } }
 }
 
@@ -608,17 +626,17 @@ function wreckCar(S, c) {
   c.vx *= 0.6; c.vz *= 0.6
   S.wrecks++
   ev(S, { k: 'explode', x: c.x, y: c.y + 1, z: c.z, id: c.id, team: c.team })
-  if (c.spot >= 0 && c.team < 0) S.respawns.push({ spot: c.spot, t: 12 })
   if (c.team < 0) return
   const t = S.teams[c.team], by = c.lastHit && S.t - c.lastHit.t < 7 ? c.lastHit.team : null
-  t.stock--; t.car = -1
-  if (by !== null && by !== t.id) { S.teams[by].kills++; }
+  t.deaths++; t.car = -1
+  if (S.mode === 'stock') t.stock--
+  if (by !== null && by !== t.id) { S.teams[by].kills++ }
   ev(S, { k: 'kill', by, victim: t.id, how: 'car' })
-  if (t.stock <= 0) { eliminate(S, t); return }
+  if (S.mode === 'stock' && t.stock <= 0) { eliminate(S, t); return }
   ejectPeople(S, t, c)
 }
 function ejectPeople(S, t, c) {
-  t.walking = true; t.footHp = 60; t.footLast = null; t.swapReq = false; t.swapT = 0
+  t.walking = true; t.footHp = 60; t.footLast = null; t.swapReq = false; t.swapT = 0; t.respT = RESPAWN_SEC; t.footDead = false
   for (const p of t.p) {
     p.state = 'fly'; p.x = c.x + (S.rng() - 0.5); p.z = c.z + (S.rng() - 0.5); p.y = c.y + 1.4
     const a = S.rng() * 6.28, v = 3 + S.rng() * 5
@@ -630,24 +648,31 @@ function eliminate(S, t) {
   for (const p of t.p) { if (p.state !== 'dead') ev(S, { k: 'pdie', x: p.x, y: p.y, z: p.z, team: t.id }); p.state = 'dead' }
   ev(S, { k: 'out', team: t.id })
 }
+// 歩いている間に倒された: 相手にポイント。残り時間が過ぎれば再スタート（残機は減らさない）
 function footDeath(S, t) {
   const by = t.footLast && S.t - t.footLast.t < 7 ? t.footLast.team : null
-  t.stock--
   if (by !== null && by !== t.id) S.teams[by].kills++
+  t.deaths++
   ev(S, { k: 'kill', by, victim: t.id, how: 'foot' })
-  for (const p of t.p) ev(S, { k: 'pdie', x: p.x, y: p.y, z: p.z, team: t.id })
-  if (t.stock <= 0) { eliminate(S, t); return }
-  // 空き車のそばへ戻って歩き直し
-  const spares = S.cars.filter(c => c.alive && c.team < 0)
-  let best = null, bd = 1e9
-  for (const c of spares) { const d = Math.hypot(c.x - t.p[0].x, c.z - t.p[0].z); if (d > 12 && d < bd) { bd = d; best = c } }
-  const sp = best || TEAM_SPAWNS[t.id]
-  t.footHp = 60; t.footLast = null
-  for (const p of t.p) { p.state = 'walk'; p.x = sp.x + (p.idx ? 2 : -2); p.z = sp.z - 4; p.y = H(p.x, p.z); p.invT = 2.5; p.vx = p.vz = p.vy = 0 }
+  for (const p of t.p) { if (p.state !== 'dead') ev(S, { k: 'pdie', x: p.x, y: p.y, z: p.z, team: t.id }); p.state = 'dead' }
+  t.footDead = true; t.footHp = 1
+}
+// 再スタート: 自分の出発地点（ふさがっていれば、敵から遠い空いた出発地点）に新しい車
+function respawnTeam(S, t) {
+  const crowd = sp => S.cars.reduce((m, q) => (q.alive || q.wreckT < 3) ? Math.min(m, Math.hypot(q.x - sp.x, q.z - sp.z)) : m, 999)
+  let sp = TEAM_SPAWNS[t.id]
+  if (crowd(sp) < 12) { let bd = -1; for (const q of TEAM_SPAWNS) { const d = crowd(q); if (d > bd) { bd = d; sp = q } } }
+  const f = freeSpot(sp.x, sp.z, 4.5)
+  const c = newCar(S, f.x, f.z, Math.atan2(-f.x, -f.z), t.id, t.loadout.car)
+  c.invT = 2.0; c.gunYaw = c.yaw; c.boost = 1
+  t.car = c.id; t.walking = false; t.respT = 0; t.footDead = false; t.footHp = 0; t.swapReq = false; t.swapT = 0
+  for (const w of t.ws) { w.mag = WEAPONS[w.id].mag; w.reloadT = 0; w.heat = 0; w.overT = 0 }
+  for (const p of t.p) { p.state = 'ride'; p.invT = 0 }
+  ev(S, { k: 'respawn', team: t.id, x: c.x, y: c.y, z: c.z, id: c.id })
 }
 function updatePeople(S, inputs, dt, live) {
   for (const t of S.teams) {
-    if (t.out || !t.walking) continue
+    if (t.out || !t.walking || t.footDead) continue
     const inp = inputs[t.id] || {}
     const [p0, p1] = t.p
     for (const p of t.p) {
@@ -685,21 +710,7 @@ function updatePeople(S, inputs, dt, live) {
         }
       }
     }
-    // 空き車に乗る
-    if (p0.state === 'walk' || p1.state === 'walk') {
-      const lead = p0.state === 'walk' ? p0 : p1
-      for (const c of S.cars) {
-        if (!c.alive || c.team >= 0) continue
-        if (Math.hypot(c.x - lead.x, c.z - lead.z) < 3.0 && Math.abs(c.y - lead.y) < 2) { boardCar(S, t, c); break }
-      }
-    }
   }
-}
-function boardCar(S, t, c) {
-  c.team = t.id; t.car = c.id; t.walking = false; c.hp = Math.max(c.hp, 70); c.invT = 1.4; c.gunYaw = c.yaw; c.boost = 1; for (const w of t.ws) { w.mag = WEAPONS[w.id].mag; w.reloadT = 0; w.heat = 0; w.overT = 0 }
-  for (const p of t.p) p.state = 'ride'
-  if (c.spot >= 0) { S.respawns.push({ spot: c.spot, t: 14 }); c.spot = -1 }
-  ev(S, { k: 'board', team: t.id, x: c.x, y: c.y, z: c.z, id: c.id })
 }
 
 // ---------------------------------------------------------------- 問い合わせ（人の照準補助・CPU が使う）
@@ -729,6 +740,5 @@ export function assistAim(S, car, yaw, cone = 0.14, range = 70) {
   return best
 }
 export function standings(S) {
-  const key = t => t.out ? -1000 + t.outT : 1000 + t.stock * 100 + t.kills * 3
-  return [...S.teams].sort((a, b) => key(b) - key(a))
+  return [...S.teams].sort((a, b) => scoreKey(S, b) - scoreKey(S, a))
 }

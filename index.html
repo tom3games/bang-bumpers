@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BANG BUMPERS｜2人1組で車をぶつけて撃つ10人バトル・無料ブラウザゲーム</title>
-<meta name="description" content="1人が運転、1人が撃つ。廃工場のアリーナで5チーム10人が体当たりとおもちゃの銃で大乱闘。相棒はCPU、スマホでもすぐ遊べる無料ブラウザゲーム。">
+<title>BANG BUMPERS｜2人1組で車をぶつけて撃つ12人バトル・無料ブラウザゲーム</title>
+<meta name="description" content="1人が運転、1人が撃つ。廃工場のアリーナで6チーム12人が体当たりとおもちゃの銃で大乱闘。相棒はCPU、スマホでもすぐ遊べる無料ブラウザゲーム。">
 <meta property="og:type" content="website">
-<meta property="og:title" content="BANG BUMPERS｜2人1組で車をぶつけて撃つ10人バトル">
-<meta property="og:description" content="1人が運転、1人が撃つ。廃工場で5チームが体当たりと花火ロケットで大乱闘。無料・登録なし。">
+<meta property="og:title" content="BANG BUMPERS｜2人1組で車をぶつけて撃つ12人バトル">
+<meta property="og:description" content="1人が運転、1人が撃つ。廃工場で6チームが体当たりと花火ロケットで大乱闘。無料・登録なし。">
 <meta property="og:image" content="https://tom3games.github.io/bang-bumpers/og.png">
 <meta property="og:url" content="https://tom3games.github.io/bang-bumpers/">
 <meta name="twitter:card" content="summary_large_image">
@@ -16,10 +16,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 <style>[hidden]{display:none!important}</style>
 <script>
+(function(){
+  function f(){var v=window.visualViewport,h=v&&v.height?v.height:innerHeight;document.documentElement.style.setProperty('--vh',Math.round(h)+'px')}
+  f();addEventListener('resize',f);addEventListener('orientationchange',function(){setTimeout(f,150);setTimeout(f,500)});
+  if(window.visualViewport){visualViewport.addEventListener('resize',f);visualViewport.addEventListener('scroll',f)}
+})();
 (function(){
   var opt={passive:false};
   ['gesturestart','gesturechange','gestureend'].forEach(function(n){document.addEventListener(n,function(e){e.preventDefault()},opt)});
@@ -52,12 +57,16 @@
 
 <section id="title" hidden>
   <div class="logo">
-    <p class="kick" data-en="2 per car · 5 teams · 10 players">2人1組・5チーム・10人</p>
+    <p class="kick" data-en="2 per car · 6 teams · 12 players">2人1組・6チーム・12人</p>
     <h1><span>BANG</span><span>BUMPERS</span></h1>
-    <p class="tape" data-en="<b>One drives, one shoots.</b> <b>Last team rolling wins.</b>"><b>1人が運転、1人が撃つ。</b><b>最後まで走っていたチームの勝ち。</b></p>
+    <p class="tape" data-en="<b>One drives, one shoots.</b> <b>Wrecked? Back in 5 seconds.</b>"><b>1人が運転、1人が撃つ。</b><b>壊されても5秒で再スタート。</b></p>
   </div>
   <div class="pick">
     <label class="pname"><span data-en="NAME">なまえ</span><input id="pName" maxlength="8" autocomplete="off" spellcheck="false" placeholder="あなた" data-en-ph="You"></label>
+    <div id="modes" class="modes" role="group" aria-label="あそび方">
+      <button class="mode" data-m="stock" aria-pressed="true"><b data-en="Stock">残機制</b><span data-en="3 cars and you are out. Last team wins">3台壊れたら脱落。最後の1チームが勝ち</span></button>
+      <button class="mode" data-m="points" aria-pressed="false"><b data-en="Points">ポイント制</b><span data-en="3 minutes. 1 point per KO">3分間。撃破で1点・何度でも復活</span></button>
+    </div>
     <p class="q" data-en="Pick your seat. A CPU partner takes the other.">どっちに乗る？もう1人はCPUが乗る</p>
     <div class="seats">
       <button id="goDrive" class="seat"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="22" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="32" cy="32" r="5" fill="currentColor"/><path d="M32 37v17M27 31L10 38M37 31l17 7" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg><b data-en="DRIVE">運転する</b><span data-en="Ram them. Your partner shoots.">体当たり担当。相棒が撃つ</span></button>
@@ -76,7 +85,7 @@
       <dt data-en="Driver">運転</dt><dd data-en="Left arrows steer. Hold Gas to go, hold Back to brake and reverse.">左の矢印でハンドル。右の「アクセル」を押している間だけ進み、「バック」でブレーキと後退</dd>
       <dt data-en="Shooter">射手</dt><dd data-en="Drag to aim, big button fires, the swap button changes guns.">画面をなぞって向き、大きなボタンで撃つ。持ち替えで銃を替える</dd>
     </dl>
-    <p class="note" data-en="Cars lose HP from hits, bullets and blasts. Lose all 3 cars and your team is out. When yours blows up you are thrown out: run to a grey spare car.">体当たり・弾・爆発で壊れる。3台壊れたら脱落。壊れると2人とも放り出されるので、灰色の空き車まで走って乗り直す。</p>
+    <p class="note" data-en="Cars lose HP from hits, bullets and blasts. When yours blows up you are thrown out and run for 5 seconds, then restart in a new car. Anyone caught on foot gives the other team a point. A repair box appears in the center now and then.">体当たり・弾・爆発で壊れる。壊れると2人とも放り出され、5秒走り回ってから新しい車で再スタート。走っている間に倒されると相手に1点。ステージの真ん中にはたまに修理箱が出る。</p>
   </div>
   <div class="foot">
     <button id="muteT" class="mini" aria-label="音"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9z" fill="currentColor"/><path class="on" d="M16 8a5 5 0 010 8M19 5a9 9 0 010 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
@@ -105,6 +114,7 @@
   <canvas id="radar" width="184" height="184"></canvas>
   <ul id="feed"></ul>
   <div id="msg"></div>
+  <div id="resp" hidden><b>5</b><span>秒で再スタート</span></div>
   <div id="cross" hidden><i></i></div>
   <div id="marks"></div>
   <div id="wslots"></div>
@@ -144,7 +154,7 @@
 <div id="err"></div>
 
 <script src="js/sfx.js"></script>
-<script type="module" src="js/main.js?v=5"></script>
-<script src="support.js?v=5" data-ja="ガソリン" data-en="some gas"></script>
+<script type="module" src="js/main.js?v=6"></script>
+<script src="support.js?v=6" data-ja="ガソリン" data-en="some gas"></script>
 </body>
 </html>

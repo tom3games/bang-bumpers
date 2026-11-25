@@ -1,11 +1,11 @@
 // CPU の頭。運転役・射手役・歩きを別々に作り、makeInputs で人の入力と混ぜて チームごとの入力 にする。
 // 状態(S)は読むだけ。サーバーに移しても同じ関数がそのまま動く。
-import { H, WORLD, pushOutCircle, lineClear, clamp } from './arena.js?v=5'
-import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=5'
+import { H, WORLD, POLES, pushOutCircle, lineClear, clamp } from './arena.js?v=6'
+import { angDiff, enemiesOf, circles, WEAPONS, CAR_R, smokeBlocks } from './sim.js?v=6'
 
 const MEM = new WeakMap()
 const mem = t => { let m = MEM.get(t); if (!m) { m = { stuckT: 0, revT: 0, lx: 0, lz: 0, lt: 0, tgt: -1, tgtT: 0, gtgt: -1, gT: 0, noise: 0, burst: 0, rest: 0.5, aim: null, side: 1, seed: t.id * 7.13 + 1, walkStuck: 0, wlx: 0, wlz: 0, wt: 0, wside: 1, dropT: 3 + t.id }; MEM.set(t, m) } return m }
-export const STYLE = ['flank', 'rammer', 'circler', 'rammer', 'circler']
+export const STYLE = ['flank', 'rammer', 'circler', 'rammer', 'circler', 'flank']
 
 function blocked(S, x, z, y, self) {
   if (x * x + z * z > (WORLD - 3) * (WORLD - 3)) return true
@@ -197,20 +197,28 @@ export function cpuGun(S, t, c, dt) {
   return { aim, fire, reload: w.mag < W.mag * 0.25 && !fire, useG, wsel }
 }
 
+// 歩いている間（再スタートまで）: 一番近い敵の車から逃げる。敵が遠ければ、柱のかげへ寄る
 export function cpuWalk(S, t, dt) {
   const m = mem(t), p0 = t.p[0].state === 'walk' ? t.p[0] : t.p[1]
   if (p0.state !== 'walk') return { walkX: 0, walkZ: 0 }
-  let best = null, bd = 1e9
-  for (const c of S.cars) { if (!c.alive || c.team >= 0) continue; const d = Math.hypot(c.x - p0.x, c.z - p0.z); if (d < bd) { bd = d; best = c } }
-  if (!best) return { walkX: 0, walkZ: 0 }
+  let near = null, bd = 1e9
+  for (const c of S.cars) { if (!c.alive || c.team === t.id || c.team < 0) continue; const d = Math.hypot(c.x - p0.x, c.z - p0.z); if (d < bd) { bd = d; near = c } }
   // 詰まり
   m.wt += dt
   if (m.wt > 1) { if (Math.hypot(p0.x - m.wlx, p0.z - m.wlz) < 1.2) { m.walkStuck = 1.4; m.wside = -m.wside } m.wlx = p0.x; m.wlz = p0.z; m.wt = 0 }
-  let ang = Math.atan2(best.x - p0.x, best.z - p0.z)
+  let ang
+  if (near && bd < 45) {
+    ang = Math.atan2(p0.x - near.x, p0.z - near.z)                      // 敵から離れる向き
+    ang += m.wside * Math.min(0.9, Math.max(0, (22 - bd) / 22) * 0.9)  // 近いほど横へ振って、まっすぐ轢かれない
+  } else {
+    let bp = null, pd = 1e9
+    for (const o of POLES) { if (o.kind !== 'pillar') continue; const d = Math.hypot(o.x - p0.x, o.z - p0.z); if (d < pd) { pd = d; bp = o } }
+    ang = bp && pd > 3.5 ? Math.atan2(bp.x - p0.x, bp.z - p0.z) : p0.yaw + Math.sin(S.t * 1.3 + m.seed) * 0.8
+  }
   if (m.walkStuck > 0) { m.walkStuck -= dt; ang += 1.5 * m.wside }
   else {
-    const probe = (a) => { for (let d = 1.5; d <= 4.5; d += 1.5) { const out = []; if (pushOutCircle(p0.x + Math.sin(a) * d, p0.y, p0.z + Math.cos(a) * d, 0.7, 1.8, out) || H(p0.x + Math.sin(a) * d, p0.z + Math.cos(a) * d) - p0.y > 0.7) return false } return true }
-    for (const off of [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6]) if (probe(ang + off)) { ang += off; break }
+    const probe = (a) => { for (let d = 1.5; d <= 4.5; d += 1.5) { const out = []; const x = p0.x + Math.sin(a) * d, z = p0.z + Math.cos(a) * d; if (pushOutCircle(x, p0.y, z, 0.7, 1.8, out) || H(x, z) - p0.y > 0.7 || x * x + z * z > (WORLD - 3) * (WORLD - 3)) return false } return true }
+    for (const off of [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.4]) if (probe(ang + off)) { ang += off; break }
   }
   return { walkX: Math.sin(ang), walkZ: Math.cos(ang) }
 }

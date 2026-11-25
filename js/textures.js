@@ -1,6 +1,6 @@
 // 絵はすべてその場で描く（画像ファイルなし）。廃工場のコンクリート・壁・木箱・鉄板
 import * as THREE from 'three'
-import { WORLD, BOWL, RAMPS, TEAM_SPAWNS } from './arena.js?v=5'
+import { WORLD, RAMPS, TEAM_SPAWNS } from './arena.js?v=6'
 const HALF = WORLD
 
 function rnd(seed) { let a = seed; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
@@ -12,52 +12,6 @@ function tex(c, rep = 1, srgb = true, aniso = 8) {
 }
 
 // 床: 120m x 120m を1枚の絵に。コンクリート・継ぎ目・黄黒のふち・すり鉢の輪・塗装の跡・油のしみ
-export function floorTexture(size = 2048, aniso = 8) {
-  const [c, g] = canvas(size, size), R = rnd(7), k = size / (HALF * 2)
-  const X = x => (x + HALF) * k, Z = z => (z + HALF) * k
-  g.fillStyle = '#8b8984'; g.fillRect(0, 0, size, size)
-  // 粒
-  for (let i = 0; i < size * 14; i++) { const v = 118 + R() * 50 | 0; g.fillStyle = `rgba(${v},${v - 2},${v - 6},${0.03 + R() * 0.05})`; g.fillRect(R() * size, R() * size, 1 + R() * 2, 1 + R() * 2) }
-  // 大きなむら
-  for (let i = 0; i < 90; i++) { const x = R() * size, y = R() * size, r = (30 + R() * 160) * k / 2, gr = g.createRadialGradient(x, y, 0, x, y, r); const d = R() < 0.5; gr.addColorStop(0, d ? 'rgba(40,38,34,0.12)' : 'rgba(200,196,188,0.10)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2) }
-  // 継ぎ目
-  g.strokeStyle = 'rgba(40,38,34,0.55)'; g.lineWidth = Math.max(1, k * 0.09)
-  for (let v = -HALF; v <= HALF; v += 10) { g.beginPath(); g.moveTo(X(v), 0); g.lineTo(X(v), size); g.stroke(); g.beginPath(); g.moveTo(0, Z(v)); g.lineTo(size, Z(v)); g.stroke() }
-  // ひび割れ
-  g.strokeStyle = 'rgba(30,28,25,0.5)'; g.lineWidth = Math.max(1, k * 0.05)
-  for (let i = 0; i < 26; i++) { let x = R() * size, y = R() * size; g.beginPath(); g.moveTo(x, y); for (let j = 0; j < 14; j++) { x += (R() - 0.5) * 26 * k; y += (R() - 0.3) * 20 * k; g.lineTo(x, y) } g.stroke() }
-  // 油のしみ
-  for (let i = 0; i < 14; i++) { const x = R() * size, y = R() * size, r = (1.5 + R() * 4) * k, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(18,16,14,0.45)'); gr.addColorStop(0.7, 'rgba(18,16,14,0.18)'); gr.addColorStop(1, 'rgba(18,16,14,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r * (1 + R()), r, R() * 3, 0, 7); g.fill() }
-  // 黄黒のふち（壁ぎわの通路を表す線）
-  const stripeBox = (x0, z0, x1, z1, w) => {
-    g.save(); g.beginPath(); g.rect(X(x0), Z(z0), X(x1) - X(x0), Z(z1) - Z(z0)); g.rect(X(x0 + w), Z(z0 + w), X(x1 - w) - X(x0 + w), Z(z1 - w) - Z(z0 + w)); g.clip('evenodd')
-    g.fillStyle = '#e8b81c'; g.fillRect(0, 0, size, size); g.fillStyle = '#1d1c1a'
-    const s = 1.6 * k; for (let i = -size; i < size * 2; i += s * 2) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + s, 0); g.lineTo(i + s - size, size); g.lineTo(i - size, size); g.fill() }
-    g.restore()
-  }
-  stripeBox(-HALF + 3, -HALF + 3, HALF - 3, HALF - 3, 0.5)
-  // すり鉢のふち: 黄黒の輪
-  g.save(); g.beginPath(); g.arc(X(0), Z(0), BOWL.r * k + 0.4 * k, 0, 7); g.arc(X(0), Z(0), BOWL.r * k - 0.4 * k, 0, 7, true); g.clip('evenodd')
-  g.fillStyle = '#e8b81c'; g.fillRect(0, 0, size, size); g.fillStyle = '#1d1c1a'; { const s = 1.4 * k; for (let i = -size; i < size * 2; i += s * 2) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + s, 0); g.lineTo(i + s - size, size); g.lineTo(i - size, size); g.fill() } } g.restore()
-  // すり鉢の中: 同心円の白線と数字の目盛り
-  g.strokeStyle = 'rgba(235,232,222,0.7)'; g.lineWidth = k * 0.18
-  for (const r of [6, 12]) { g.beginPath(); g.arc(X(0), Z(0), r * k, 0, 7); g.stroke() }
-  g.fillStyle = 'rgba(30,28,25,0.55)'; g.beginPath(); g.arc(X(0), Z(0), 3.2 * k, 0, 7); g.fill()
-  // 中央の「バンパー」の図（黄色い大きな丸）
-  g.fillStyle = 'rgba(232,184,28,0.9)'; g.font = `900 ${k * 3.6}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'
-  // 走路の矢印（床の塗装）
-  const arrow = (x, z, a, len = 5) => { g.save(); g.translate(X(x), Z(z)); g.rotate(a); g.fillStyle = 'rgba(232,184,28,0.75)'; const L = len * k, W = len * 0.38 * k; g.beginPath(); g.moveTo(0, -L / 2); g.lineTo(W, 0); g.lineTo(W * 0.4, 0); g.lineTo(W * 0.4, L / 2); g.lineTo(-W * 0.4, L / 2); g.lineTo(-W * 0.4, 0); g.lineTo(-W, 0); g.closePath(); g.fill(); g.restore() }
-  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + 0.39; arrow(Math.sin(a) * 33, Math.cos(a) * 33, -a + Math.PI, 5) }
-  // ランプの前に注意の斜線
-  for (const p of RAMPS) { const s = Math.sin(p.ang), co = Math.cos(p.ang); g.save(); g.translate(X(p.x - s * 2.5), Z(p.z - co * 2.5)); g.rotate(-p.ang); g.fillStyle = 'rgba(232,184,28,0.85)'; g.fillRect(-p.w / 2 * k, -0.5 * k, p.w * k, k); g.restore() }
-  // タイヤ跡
-  g.strokeStyle = 'rgba(20,19,18,0.28)'; g.lineWidth = k * 0.5; g.lineCap = 'round'
-  for (let i = 0; i < 36; i++) { let x = (R() - 0.5) * 100, z = (R() - 0.5) * 100, a = R() * 6.28; g.beginPath(); g.moveTo(X(x), Z(z)); for (let j = 0; j < 10; j++) { a += (R() - 0.5) * 0.5; x += Math.sin(a) * 3; z += Math.cos(a) * 3; g.lineTo(X(x), Z(z)) } g.stroke() }
-  // 上の通路の下の色
-  g.fillStyle = 'rgba(0,0,0,0.0)'
-  const t = tex(c, 1, true, aniso); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t
-}
-
 export function wallTexture(aniso = 8) {
   const [c, g] = canvas(1024, 512), R = rnd(21)
   g.fillStyle = '#6f6b64'; g.fillRect(0, 0, 1024, 512)
@@ -166,31 +120,32 @@ export function floorTint() {
   g.fillStyle = '#5c5f63'; g.beginPath(); g.arc(X(0), Z(0), WORLD * k, 0, 7); g.fill()                // アスファルト
   for (let i = 0; i < 90; i++) { const a = R() * 6.283, d = Math.sqrt(R()) * (WORLD - 4), x = X(Math.sin(a) * d), y = Z(Math.cos(a) * d), r = (4 + R() * 16) * k, gr = g.createRadialGradient(x, y, 0, x, y, r); const m = R(); gr.addColorStop(0, m < 0.5 ? 'rgba(30,30,32,0.55)' : m < 0.8 ? 'rgba(96,92,86,0.40)' : 'rgba(70,64,54,0.4)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) }
   // 走る道筋はゴムがのって黒い
-  for (const rr of [32, 62, 84]) { g.strokeStyle = 'rgba(28,28,30,0.35)'; g.lineWidth = 9 * k; g.beginPath(); g.arc(X(0), Z(0), rr * k, 0, 7); g.stroke() }
+  for (const rr of [38, 74, 100]) { g.strokeStyle = 'rgba(28,28,30,0.35)'; g.lineWidth = 9 * k; g.beginPath(); g.arc(X(0), Z(0), rr * k, 0, 7); g.stroke() }
   // 投光器の明るい所（外周の12本が内向きに照らす）
-  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283, x = X(Math.sin(a) * 78), y = Z(Math.cos(a) * 78), r = 52 * k, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(255,238,205,0.44)'); gr.addColorStop(0.5, 'rgba(255,236,200,0.2)'); gr.addColorStop(1, 'rgba(255,238,205,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) }
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283, x = X(Math.sin(a) * 94), y = Z(Math.cos(a) * 94), r = 52 * k, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(255,238,205,0.44)'); gr.addColorStop(0.5, 'rgba(255,236,200,0.2)'); gr.addColorStop(1, 'rgba(255,238,205,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t
 }
 export function floorPaint(size = 2048) {
   const [c, g] = canvas(size, size), R = rnd(31), k = size / (WORLD * 2)
   const X = x => (x + WORLD) * k, Z = z => (z + WORLD) * k
   const ring = (r, w, col, dash) => { g.save(); g.strokeStyle = col; g.lineWidth = w * k; if (dash) g.setLineDash(dash.map(d => d * k)); g.beginPath(); g.arc(X(0), Z(0), r * k, 0, 7); g.stroke(); g.restore() }
-  // すり鉢のふち: 黄黒のはっきりした輪（落ちる所の目印）
-  { g.save(); g.beginPath(); g.arc(X(0), Z(0), (BOWL.r + 0.5) * k, 0, 7); g.arc(X(0), Z(0), (BOWL.r - 0.5) * k, 0, 7, true); g.clip('evenodd'); g.fillStyle = '#c9a233'; g.fillRect(0, 0, size, size); g.fillStyle = '#1a1917'; const s = 1.3 * k; for (let i = -size; i < size * 2; i += s * 2) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + s, 0); g.lineTo(i + s - size, size); g.lineTo(i - size, size); g.fill() } g.restore() }
-  ring(30, 0.25, 'rgba(225,222,212,0.75)', [3, 3]); ring(60, 0.25, 'rgba(225,222,212,0.7)', [4, 4]); ring(88, 0.3, 'rgba(225,222,212,0.75)')
+  // 真ん中: 耐久回復の箱が出る所。平らな床に白い輪と十字だけ（穴や影は作らない）
+  ring(5.2, 0.35, 'rgba(235,232,222,0.85)'); ring(7.4, 0.2, 'rgba(235,232,222,0.55)', [1.6, 1.6])
+  { g.save(); g.translate(X(0), Z(0)); g.fillStyle = 'rgba(67,209,122,0.35)'; g.fillRect(-1.0 * k, -3.4 * k, 2.0 * k, 6.8 * k); g.fillRect(-3.4 * k, -1.0 * k, 6.8 * k, 2.0 * k); g.restore() }
+  ring(36, 0.25, 'rgba(225,222,212,0.75)', [3, 3]); ring(72, 0.25, 'rgba(225,222,212,0.7)', [4, 4]); ring(106, 0.3, 'rgba(225,222,212,0.75)')
   // 放射状のレーン線（点線）
-  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; g.save(); g.strokeStyle = 'rgba(210,206,196,0.55)'; g.lineWidth = 0.22 * k; g.setLineDash([2.5 * k, 3.5 * k]); g.beginPath(); g.moveTo(X(Math.sin(a) * (BOWL.r + 3)), Z(Math.cos(a) * (BOWL.r + 3))); g.lineTo(X(Math.sin(a) * 86), Z(Math.cos(a) * 86)); g.stroke(); g.restore() }
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; g.save(); g.strokeStyle = 'rgba(210,206,196,0.55)'; g.lineWidth = 0.22 * k; g.setLineDash([2.5 * k, 3.5 * k]); g.beginPath(); g.moveTo(X(Math.sin(a) * 10), Z(Math.cos(a) * 10)); g.lineTo(X(Math.sin(a) * 104), Z(Math.cos(a) * 104)); g.stroke(); g.restore() }
   // 壁ぎわの赤白の縁石帯と白線
-  ring(97.3, 1.6, 'rgba(200,196,186,0.9)'); { for (let i = 0; i < 96; i++) { g.strokeStyle = i % 2 ? '#b5352c' : '#d8d4c8'; g.lineWidth = 1.5 * k; g.beginPath(); g.arc(X(0), Z(0), 97.4 * k, i / 96 * 6.283, (i + 1) / 96 * 6.283); g.stroke() } }
-  ring(93, 0.35, 'rgba(230,226,216,0.85)')
+  ring(WORLD - 2.7, 1.6, 'rgba(200,196,186,0.9)'); { for (let i = 0; i < 96; i++) { g.strokeStyle = i % 2 ? '#b5352c' : '#d8d4c8'; g.lineWidth = 1.5 * k; g.beginPath(); g.arc(X(0), Z(0), (WORLD - 2.6) * k, i / 96 * 6.283, (i + 1) / 96 * 6.283); g.stroke() } }
+  ring(WORLD - 7, 0.35, 'rgba(230,226,216,0.85)')
   // 出発位置の塗り（番号つき）
   TEAM_SPAWNS.forEach((p, i) => { g.save(); g.translate(X(p.x), Z(p.z)); g.rotate(-p.yaw + Math.PI); g.strokeStyle = 'rgba(232,228,216,0.85)'; g.lineWidth = 0.3 * k; g.strokeRect(-3.4 * k, -4.8 * k, 6.8 * k, 9.6 * k); g.fillStyle = 'rgba(232,228,216,0.85)'; g.font = `800 ${3.2 * k}px "Big Shoulders Display", Impact, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), 0, 6.8 * k); g.restore() })
-  // 坂の前の注意の線
-  for (const p of RAMPS) { const s = Math.sin(p.ang), co = Math.cos(p.ang); g.save(); g.translate(X(p.x - s * 2.2), Z(p.z - co * 2.2)); g.rotate(-p.ang); g.fillStyle = 'rgba(206,168,50,0.8)'; g.fillRect(-p.w / 2 * k, -0.35 * k, p.w * k, 0.7 * k); g.restore() }
+  // ジャンプ台の裾の注意の輪（黄の破線）
+  for (const p of RAMPS) { g.save(); g.strokeStyle = 'rgba(206,168,50,0.85)'; g.lineWidth = 0.5 * k; g.setLineDash([1.6 * k, 1.2 * k]); g.beginPath(); g.arc(X(p.x), Z(p.z), (p.r0 + 1.0) * k, 0, 7); g.stroke(); g.restore() }
   // 油のしみ・タイヤ跡・ひび
-  for (let i = 0; i < 50; i++) { const a = R() * 6.283, d = Math.sqrt(R()) * 92, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), r = (1.2 + R() * 3.4) * k, gr = g.createRadialGradient(x, z, 0, x, z, r); gr.addColorStop(0, 'rgba(10,10,10,0.55)'); gr.addColorStop(0.7, 'rgba(10,10,10,0.22)'); gr.addColorStop(1, 'rgba(10,10,10,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, z, r * (1 + R()), r, R() * 3, 0, 7); g.fill() }
+  for (let i = 0; i < 50; i++) { const a = R() * 6.283, d = Math.sqrt(R()) * 110, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), r = (1.2 + R() * 3.4) * k, gr = g.createRadialGradient(x, z, 0, x, z, r); gr.addColorStop(0, 'rgba(10,10,10,0.55)'); gr.addColorStop(0.7, 'rgba(10,10,10,0.22)'); gr.addColorStop(1, 'rgba(10,10,10,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, z, r * (1 + R()), r, R() * 3, 0, 7); g.fill() }
   g.lineCap = 'round'
-  for (let i = 0; i < 140; i++) { const a0 = R() * 6.283, d0 = Math.sqrt(R()) * 90; let x = Math.sin(a0) * d0, z = Math.cos(a0) * d0, a = R() * 6.28; g.strokeStyle = 'rgba(10,10,10,0.3)'; g.lineWidth = k * 0.45; g.beginPath(); g.moveTo(X(x), Z(z)); for (let j = 0; j < 12; j++) { a += (R() - 0.5) * 0.4; x += Math.sin(a) * 3; z += Math.cos(a) * 3; g.lineTo(X(x), Z(z)) } g.stroke() }
+  for (let i = 0; i < 140; i++) { const a0 = R() * 6.283, d0 = Math.sqrt(R()) * 110; let x = Math.sin(a0) * d0, z = Math.cos(a0) * d0, a = R() * 6.28; g.strokeStyle = 'rgba(10,10,10,0.3)'; g.lineWidth = k * 0.45; g.beginPath(); g.moveTo(X(x), Z(z)); for (let j = 0; j < 12; j++) { a += (R() - 0.5) * 0.4; x += Math.sin(a) * 3; z += Math.cos(a) * 3; g.lineTo(X(x), Z(z)) } g.stroke() }
   g.strokeStyle = 'rgba(14,13,12,0.5)'; g.lineWidth = Math.max(1, k * 0.06)
   for (let i = 0; i < 80; i++) { let x = R() * size, y = R() * size; g.beginPath(); g.moveTo(x, y); for (let j = 0; j < 12; j++) { x += (R() - 0.5) * 24 * k; y += (R() - 0.3) * 18 * k; g.lineTo(x, y) } g.stroke() }
   // ---- 路面の作り込み（v5）: スラブの目地・補修・マンホール・排水溝・ブレーキ跡・ドーナツ跡・タールのひび・油のにじみ
@@ -202,8 +157,8 @@ export function floorPaint(size = 2048) {
     }
   }
   const R2 = rnd(91)
-  for (let i = 0; i < 26; i++) { const a = R2() * 6.283, d = Math.sqrt(R2()) * 88, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), w = (2 + R2() * 5) * k, h = (1.5 + R2() * 4) * k; g.fillStyle = `rgba(${22 + R2() * 14 | 0},${22 + R2() * 14 | 0},${24 + R2() * 14 | 0},${0.32 + R2() * 0.25})`; g.fillRect(x, z, w, h); g.strokeStyle = 'rgba(8,8,8,0.5)'; g.lineWidth = Math.max(1, k * 0.07); g.strokeRect(x, z, w, h) }   // アスファルトの補修
-  for (let i = 0; i < 9; i++) { const a = R2() * 6.283, d = 10 + Math.sqrt(R2()) * 78, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), r = 0.62 * k; g.fillStyle = 'rgba(40,40,42,0.85)'; g.beginPath(); g.arc(x, z, r, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,118,112,0.7)'; g.lineWidth = Math.max(1, k * 0.07); g.stroke(); g.strokeStyle = 'rgba(20,20,20,0.7)'; g.lineWidth = Math.max(1, k * 0.05); for (let q = -2; q <= 2; q++) { g.beginPath(); g.moveTo(x - r * 0.8, z + q * r * 0.3); g.lineTo(x + r * 0.8, z + q * r * 0.3); g.stroke() } }   // マンホール
+  for (let i = 0; i < 26; i++) { const a = R2() * 6.283, d = Math.sqrt(R2()) * 106, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), w = (2 + R2() * 5) * k, h = (1.5 + R2() * 4) * k; g.fillStyle = `rgba(${22 + R2() * 14 | 0},${22 + R2() * 14 | 0},${24 + R2() * 14 | 0},${0.32 + R2() * 0.25})`; g.fillRect(x, z, w, h); g.strokeStyle = 'rgba(8,8,8,0.5)'; g.lineWidth = Math.max(1, k * 0.07); g.strokeRect(x, z, w, h) }   // アスファルトの補修
+  for (let i = 0; i < 9; i++) { const a = R2() * 6.283, d = 12 + Math.sqrt(R2()) * 96, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), r = 0.62 * k; g.fillStyle = 'rgba(40,40,42,0.85)'; g.beginPath(); g.arc(x, z, r, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,118,112,0.7)'; g.lineWidth = Math.max(1, k * 0.07); g.stroke(); g.strokeStyle = 'rgba(20,20,20,0.7)'; g.lineWidth = Math.max(1, k * 0.05); for (let q = -2; q <= 2; q++) { g.beginPath(); g.moveTo(x - r * 0.8, z + q * r * 0.3); g.lineTo(x + r * 0.8, z + q * r * 0.3); g.stroke() } }   // マンホール
   for (let i = 0; i < 12; i++) { const a = R2() * 6.283, d = 14 + Math.sqrt(R2()) * 76, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d); g.fillStyle = 'rgba(30,30,32,0.9)'; g.fillRect(x, z, 2.2 * k, 0.5 * k); g.strokeStyle = 'rgba(110,108,102,0.8)'; g.lineWidth = Math.max(1, k * 0.05); for (let q = 0; q <= 8; q++) { g.beginPath(); g.moveTo(x + q * 0.27 * k, z); g.lineTo(x + q * 0.27 * k, z + 0.5 * k); g.stroke() } g.strokeRect(x, z, 2.2 * k, 0.5 * k) }   // 排水溝のふた
   g.lineCap = 'round'
   for (let i = 0; i < 80; i++) {                  // ブレーキ跡・横滑りのタイヤ跡: 2本線が弧を描いて薄れる
@@ -223,7 +178,7 @@ export function floorPaint(size = 2048) {
     for (let j = 0; j < 9; j++) { x += (R2() - 0.5) * 22 * k; y += (R2() - 0.3) * 16 * k; g.lineTo(x, y) } g.stroke()
   }
   for (let i = 0; i < 70; i++) {                   // 油のにじみ: 濃い芯のまわりに薄い輪
-    const a = R2() * 6.283, d = Math.sqrt(R2()) * 90, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), r = (0.8 + R2() * 2.4) * k
+    const a = R2() * 6.283, d = Math.sqrt(R2()) * 110, x = X(Math.sin(a) * d), z = Z(Math.cos(a) * d), r = (0.8 + R2() * 2.4) * k
     const gr = g.createRadialGradient(x, z, 0, x, z, r * 1.9); gr.addColorStop(0, 'rgba(6,6,8,0.72)'); gr.addColorStop(0.45, 'rgba(10,10,12,0.4)'); gr.addColorStop(0.8, 'rgba(18,18,22,0.16)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - r * 2, z - r * 2, r * 4, r * 4)
   }
   g.restore()

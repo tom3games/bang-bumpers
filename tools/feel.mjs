@@ -34,8 +34,8 @@ for (const [i, T] of CAR_TYPES.entries()) {
   }
   console.log(`${T.name.padEnd(5)} 旋回（速度15付近） ${out.join(' ／ ')}`)
 }
-// 質量差: 軽い車(ビュン)が重い車(ドスン)へ正面10m/sで当たる
+// 質量差: 軽い車(クーペ)が重い車(ピックアップ)へ正面10m/sで当たる
 { const S = createState(5, { noCountdown: true, prepSec: 0 }); S.T = 1e9; const a = S.cars[0], b = S.cars[1]; for (const c of S.cars) if (c !== a && c !== b) { c.x = -90 - c.id; c.z = -90 } ; a.invT = b.invT = 0
   a.type = 1; b.type = 2; a.x = 99; a.z = 40; a.yaw = 0; a.vz = 10; b.x = 99; b.z = 46; b.yaw = Math.PI; b.vz = -10; for (const c of S.cars) { c.y = 0 }
   for (let i = 0; i < 80; i++) { a.invT = b.invT = 0; step(S, {}, DT); S.events.length = 0 }
-  console.log(`正面衝突 軽い車(速度10→)${fmt(a.vz)} 重い車(速度-10→)${fmt(b.vz)} HP ビュン${a.hp.toFixed(0)} ドスン${b.hp.toFixed(0)}`) }
+  console.log(`正面衝突 軽い車(速度10→)${fmt(a.vz)} 重い車(速度-10→)${fmt(b.vz)} HP クーペ${a.hp.toFixed(0)} ピックアップ${b.hp.toFixed(0)}`) }

@@ -177,7 +177,7 @@ const WEAPON_SVG = {
 }
 const WEAPON_NOTE = { paint: ['機関銃', '連射できる。撃ち続けると熱くなる', 'Rapid fire. Heats up'], rocket: ['ロケット弾', '追いかける。爆発が大きい', 'Homing. Big blast'], confetti: ['散弾', '近くで一気に広がる', 'Close-range spread'], spring: ['跳ね玉', '跳ね返って転がる重い玉', 'Bouncing slug'], cork: ['狙撃砲', '速くて遠くまで届く一発', 'Fast, long-range single shot'] }
 const CAR_NOTE_EN = ['Balanced all-rounder', 'Fast and light, fragile', 'Slow but tough, hits hard']
-const CAR_NAME_EN = ['Balance', 'Zoom', 'Thud']
+const CAR_NAME_EN = ['Sedan', 'Coupe', 'Pickup'] // 2026-11-25 本人「ドスンってダサい」→ 実車の形の名前に
 const bars = (labels, vals) => labels.map((lb, i) => `<span>${lb}</span><i>${[0, 1, 2, 3, 4].map(k => `<u class="${k < vals[i] ? 'on' : ''}"></u>`).join('')}</i>`).join('')
 let selWeapons = ['paint', 'rocket'], selCar = 0, lastKills = 0
 function lo0() { return S.teams[0].loadout }

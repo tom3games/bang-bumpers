@@ -1,5 +1,5 @@
 // 車の見た目: WRECK ISLE の実車（Car Concept・CC BY 4.0）と、断面をつないだ曲面の車体（BREAK THE ROUTE 由来）。
-// 3種: 0 バランス=セダン / 1 ビュン=クーペ（実車モデル）/ 2 ドスン=ピックアップ。屋根の射手台に人と機関銃
+// 3種: 0 セダン / 1 クーペ（実車モデル）/ 2 ピックアップ。屋根の射手台に人と機関銃
 import * as THREE from 'three'
 import { ProcCar, loadCarModel, sharedMats } from './btrcar.js?v=6'
 import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js'

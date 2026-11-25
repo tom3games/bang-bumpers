@@ -1,4 +1,4 @@
-// 射手のアイテムの強さ: 5チームがそれぞれ別のアイテムを4つ持って（銃はペイント弾×2・車はバランス）CPU 戦。優勝と撃破を数える。node tools/itest.mjs [試合数]
+// 射手のアイテムの強さ: 5チームがそれぞれ別のアイテムを4つ持って（銃はペイント弾×2・車はセダン）CPU 戦。優勝と撃破を数える。node tools/itest.mjs [試合数]
 import { createState, step, DT, setLoadout } from '../js/sim.js'
 import { makeInputs } from '../js/cpu.js'
 const ITEMS = ['grenade', 'smoke', 'ricochet', 'turret', 'flash']

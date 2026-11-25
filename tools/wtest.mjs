@@ -1,4 +1,4 @@
-// 銃ごとの強さ: 5チームがそれぞれ同じ銃2丁（車はバランス）で CPU 戦を回し、優勝と撃破を数える。node tools/wtest.mjs [試合数]
+// 銃ごとの強さ: 5チームがそれぞれ同じ銃2丁（車はセダン）で CPU 戦を回し、優勝と撃破を数える。node tools/wtest.mjs [試合数]
 import { createState, step, DT, WEAPON_IDS, setLoadout } from '../js/sim.js'
 import { makeInputs } from '../js/cpu.js'
 const N = +process.argv[2] || 60, win = {}, kil = {}, cnt = {}

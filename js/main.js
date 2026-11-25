@@ -1,25 +1,29 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=12'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=12'
-import { EngineMix } from './engine.js?v=12'
-import { makeInputs } from './cpu.js?v=12'
-import { Stage } from './stage.js?v=12'
-import { loadPeople } from './people.js?v=12'
-import { loadCars } from './cars.js?v=12'
-import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=12'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=13'
+import { cleanName as cleanNameJa, cpuNames, NAME_MAX, FALLBACKS } from './names.js?v=13'
+import { EngineMix } from './engine.js?v=13'
+import { makeInputs } from './cpu.js?v=13'
+import { Stage } from './stage.js?v=13'
+import { loadPeople } from './people.js?v=13'
+import { loadCars } from './cars.js?v=13'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=13'
 
 const Q = new URLSearchParams(location.search)
-const EN = Q.get('lang') === 'en'
+// 言語: ?lang= があればそれ。無ければ公開版は日本語、CrazyGames 版（__bbDefaultEN）は SDK の言語が ja の時だけ日本語・ほかは英語
+const EN = Q.has('lang') ? Q.get('lang') === 'en' : (window.__bbDefaultEN ? !/^ja/i.test(window.__cgLang || 'en') : false)
+const cleanName = (v, i) => { const c = cleanNameJa(v, i); return EN && FALLBACKS.includes(c) ? 'Driver' : c }   // 英語では使えない名前の置き換えも英語
+const gp = on => { try { if (window.CG) window.CG.gameplay(on) } catch (e) {} }   // CrazyGames 版だけ: 遊んでいる間を知らせる（公開版では何もしない）
 const L = (ja, en) => EN ? en : ja
 const $ = id => document.getElementById(id)
 const hex = h => '#' + h.toString(16).padStart(6, '0')
 const TEAM_EN = ['Red', 'Blue', 'Yellow', 'Green', 'Pink', 'White']
 let TN = ['あなた', ...TEAM_NAMES.slice(1)]
 const tname = i => EN && i > 0 ? TEAM_EN[i] : TN[i] || TEAM_NAMES[i]
-const touchy = (('ontouchstart' in window) && matchMedia('(pointer:coarse)').matches) || Q.get('touch') === '1'
+// CrazyGames 版は SDK の端末の種類（desktop/tablet/mobile）で決める（タッチ付きのノートPCにスマホの操作を出さない）
+const touchy = Q.get('touch') === '1' || (Q.get('touch') !== '0' && (window.__cgDevice ? window.__cgDevice !== 'desktop' : (('ontouchstart' in window) && matchMedia('(pointer:coarse)').matches)))
 if (touchy && Q.get('touch') !== '0') document.body.classList.add('touch')
-if (EN) { document.documentElement.lang = 'en'; document.title = 'BANG BUMPERS | 2-per-car, 12-player car combat - free browser game'; for (const el of document.querySelectorAll('[data-en]')) { el.innerHTML = el.dataset.en } for (const b of document.querySelectorAll('[data-en-label]')) b.setAttribute('aria-label', b.dataset.enLabel); $('btnAgain').textContent = 'Play again'; $('btnPost').textContent = 'Post on X'; $('langT').textContent = 'JA' }
+if (EN) { document.documentElement.lang = 'en'; document.title = 'BANG BUMPERS | 2-per-car, 12-player car combat - free browser game'; for (const el of document.querySelectorAll('[data-en]')) { el.innerHTML = el.dataset.en } for (const b of document.querySelectorAll('[data-en-label]')) b.setAttribute('aria-label', b.dataset.enLabel); for (const b of document.querySelectorAll('[data-en-ph]')) b.setAttribute('placeholder', b.dataset.enPh); $('btnAgain').textContent = 'Play again'; $('btnPost').textContent = 'Post on X'; $('langT').textContent = 'JA' }
 const low = touchy || Math.min(innerWidth, innerHeight) < 600 || Q.get('low') === '1'
 
 // ------------------------------------------------------------ 音
@@ -90,7 +94,11 @@ const pressBtn = (id, key) => { $(id).addEventListener('pointerdown', e => { e.p
 holdBtn('bL', 'L'); holdBtn('bR', 'R'); holdBtn('bGas', 'gas'); holdBtn('bBack', 'back'); holdBtn('bHb', 'hb'); holdBtn('bBoost', 'boost'); holdBtn('bFire', 'fire')
 pressBtn('bItem', 'use'); pressBtn('bSwap', 'swap'); pressBtn('bWswap', 'wswap')
 $('bMute').addEventListener('pointerdown', e => { e.preventDefault(); toggleMute() }); $('muteT').addEventListener('click', toggleMute)
-$('langT').addEventListener('click', () => { const u = new URL(location.href); if (EN) u.searchParams.delete('lang'); else u.searchParams.set('lang', 'en'); location.href = u.toString() })
+$('langT').addEventListener('click', () => { const u = new URL(location.href); u.searchParams.set('lang', EN ? 'ja' : 'en'); location.href = u.toString() })
+// あそび方（操作・ルール・クレジット）はタイトルのボタンで開く。最初の画面は選ぶ物だけにする
+const howOpen = on => { document.body.classList.toggle('how-open', on); if (on) playSnd('switch', { vol: 0.5 }) }
+$('howT').addEventListener('click', () => howOpen(true)); $('howX').addEventListener('click', () => howOpen(false))
+$('howPanel').addEventListener('click', e => { if (e.target.id === 'howPanel') howOpen(false) })
 let muted = false
 function toggleMute() { muted = !muted; Snd.setMute(muted); document.body.classList.toggle('muted', muted); $('muteT').classList.toggle('muted', muted); $('bMute').classList.toggle('muted', muted) }
 // 画面ドラッグ（射手・歩きの向き）と歩きの左スティック
@@ -177,6 +185,7 @@ const WEAPON_SVG = {
 }
 const WEAPON_NOTE = { paint: ['機関銃', '連射できる。撃ち続けると熱くなる', 'Rapid fire. Heats up'], rocket: ['ロケット弾', 'まっすぐ飛ぶ。爆発が大きい', 'Flies straight. Big blast'], confetti: ['散弾', '近くで一気に広がる', 'Close-range spread'], spring: ['跳ね玉', '跳ね返って転がる重い玉', 'Bouncing slug'], cork: ['狙撃砲', '速くて遠くまで届く一発', 'Fast, long-range single shot'] }
 const CAR_NOTE_EN = ['Balanced all-rounder', 'Fast and light, fragile', 'Slow but tough, hits hard']
+const WEAPON_EN = { paint: 'Machine gun', rocket: 'Rocket', confetti: 'Shotgun', spring: 'Bouncer', cork: 'Sniper cannon' }
 const CAR_NAME_EN = ['Sedan', 'Coupe', 'Pickup'] // 2026-11-25 本人「ドスンってダサい」→ 実車の形の名前に
 const bars = (labels, vals) => labels.map((lb, i) => `<span>${lb}</span><i>${[0, 1, 2, 3, 4].map(k => `<u class="${k < vals[i] ? 'on' : ''}"></u>`).join('')}</i>`).join('')
 let selWeapons = ['paint', 'rocket'], selCar = 0, lastKills = 0
@@ -193,7 +202,7 @@ function buildPrep() {
     root.innerHTML = CAR_TYPES.map((c, i) => `<button class="card" data-i="${i}" style="--pc:var(--drv)"><span class="tick"></span><div class="ic">${CAR_SVG[i]}</div><h3>${L(c.name, CAR_NAME_EN[i])}</h3><p class="nt">${L(c.note, CAR_NOTE_EN[i])}</p><div class="bars">${bars([L('速さ', 'SPD'), L('硬さ', 'ARM'), L('小回り', 'TURN'), L('重さ', 'MASS')], c.stat)}</div></button>`).join('')
     root.querySelectorAll('.card').forEach(el => el.addEventListener('click', () => { selCar = +el.dataset.i; applyLoadout(); markPrep(); playSnd('switch', { vol: 0.6 }) }))
   } else {
-    root.innerHTML = WEAPON_IDS.map(id => { const W = WEAPONS[id], n = WEAPON_NOTE[id]; return `<button class="card" data-id="${id}" style="--pc:var(--gun)"><span class="slot"><b></b></span><div class="ic">${WEAPON_SVG[id]}</div><h3>${L(n[0], W.name)}</h3><p class="nt">${L(n[1], n[2])}</p><div class="bars">${bars([L('威力', 'PWR'), L('連射', 'RATE'), L('射程', 'RANGE')], W.stat)}</div></button>` }).join('')
+    root.innerHTML = WEAPON_IDS.map(id => { const W = WEAPONS[id], n = WEAPON_NOTE[id]; return `<button class="card" data-id="${id}" style="--pc:var(--gun)"><span class="slot"><b></b></span><div class="ic">${WEAPON_SVG[id]}</div><h3>${L(n[0], WEAPON_EN[id])}</h3><p class="nt">${L(n[1], n[2])}</p><div class="bars">${bars([L('威力', 'PWR'), L('連射', 'RATE'), L('射程', 'RANGE')], W.stat)}</div></button>` }).join('')
     root.querySelectorAll('.card').forEach(el => el.addEventListener('click', () => {
       const id = el.dataset.id
       if (selWeapons.includes(id)) { if (selWeapons[0] !== id) selWeapons = [id, selWeapons[0]] }   // 選んである札を押すと1つ目にする
@@ -205,10 +214,10 @@ function buildPrep() {
 }
 function comboHint() {
   const el = $('pcombo'); if (!el) return
-  if (S.teams[0].driver === 0) { const c = CAR_TYPES[selCar]; el.textContent = L(['', '足は速いが、当たり負けしやすい', '遅いが、体当たりで押し勝てる', '小回りで、すり抜けて戦える'][selCar] || L('どこにでも合う標準の車', ''), ''); if (!selCar) el.textContent = L('クセのない標準の車', 'A standard car'); void c; return }
+  if (S.teams[0].driver === 0) { const c = CAR_TYPES[selCar]; el.textContent = L(['クセのない標準の車', '足は速いが、当たり負けしやすい', '遅いが、体当たりで押し勝てる'][selCar] || '', ['A standard car with no quirks', 'Quick, but loses head-on hits', 'Slow, but wins every shoving match'][selCar] || ''); void c; return }
   const ws = selWeapons.map(id => WEAPONS[id].stat), ra = ws[0][2], rb = ws[1][2], pw = ws[0][0] + ws[1][0], rt = ws[0][1] + ws[1][1]
-  const txt = Math.abs(ra - rb) >= 2 ? '近くと遠くをカバーできる' : ra + rb >= 8 ? '遠くから削る組み合わせ' : ra + rb <= 4 ? '近づいた敵に強い組み合わせ' : rt >= 7 ? '連射でじわじわ削る' : pw >= 8 ? '一発の重さで勝負する' : '中くらいの距離で戦う'
-  el.textContent = L(txt, 'Loadout')
+  const k = Math.abs(ra - rb) >= 2 ? 0 : ra + rb >= 8 ? 1 : ra + rb <= 4 ? 2 : rt >= 7 ? 3 : pw >= 8 ? 4 : 5
+  el.textContent = L(['近くと遠くをカバーできる', '遠くから削る組み合わせ', '近づいた敵に強い組み合わせ', '連射でじわじわ削る', '一発の重さで勝負する', '中くらいの距離で戦う'][k], ['Covers close and far', 'Wears them down from range', 'Deadly up close', 'Chips away with rapid fire', 'Every shot hits hard', 'Built for mid range'][k])
 }
 function markPrep() {
   const drive = S.teams[0].driver === 0
@@ -221,19 +230,19 @@ function markPrep() {
 function refreshPartner() {
   const t = S.teams[0], drive = t.driver === 0, lo = t.loadout
   $('pmName').textContent = drive ? L('射手', 'Shooter') : L('運転', 'Driver')
-  $('pmPick').textContent = drive ? lo.weapons.map(id => L(WEAPON_NOTE[id][0], WEAPONS[id].name)).join(' + ') : L(CAR_TYPES[lo.car].name, CAR_NAME_EN[lo.car])
+  $('pmPick').textContent = drive ? lo.weapons.map(id => L(WEAPON_NOTE[id][0], WEAPON_EN[id])).join(' + ') : L(CAR_TYPES[lo.car].name, CAR_NAME_EN[lo.car])
 }
-$('pName').addEventListener('change', () => { const v = cleanName($('pName').value, 0); $('pName').value = v === 'ななしのドライバー' && !$('pName').value.trim() ? '' : v; TN[0] = $('pName').value.trim() ? v : 'あなた'; try { localStorage.setItem('bb_name', $('pName').value) } catch (e) {} })
+$('pName').addEventListener('change', () => { const v = cleanName($('pName').value, 0); $('pName').value = !$('pName').value.trim() ? '' : v; TN[0] = $('pName').value.trim() ? v : L('あなた', 'You'); try { localStorage.setItem('bb_name', $('pName').value) } catch (e) {} })
 try { const v = localStorage.getItem('bb_name'); if (v) $('pName').value = cleanName(v) } catch (e) {}
 
 function startMatch(role) {
   matchNo++
   S = createState(seedBase + matchNo * 977, { humanTeam: 0, prepSec: +(Q.get('prep') || 10), mode: gameMode })
   S.teams[0].driver = role === 'drive' ? 0 : 1
-  TN = [cleanName($('pName').value, 0) && $('pName').value.trim() ? cleanName($('pName').value, 0) : L('あなた', 'You'), ...cpuNames(S.rng, NTEAM - 1)]
+  TN = [$('pName').value.trim() ? cleanName($('pName').value, 0) : L('あなた', 'You'), ...cpuNames(S.rng, NTEAM - 1)]
   stage.clearDynamic(); human = true
   const c = S.cars.find(q => q.team === 0); aimYaw = c.yaw; snapCam = true
-  phase = 'prep'; shownResult = false; resultAt = 0
+  phase = 'prep'; shownResult = false; resultAt = 0; setPaused(false, true); gp(false)
   $('title').hidden = true; $('result').hidden = true; $('hud').hidden = true; $('prep').hidden = false
   boardCache = ''; $('feed').innerHTML = ''; $('msg').textContent = ''
   hintT = 0; hintShown = {}
@@ -243,10 +252,12 @@ function startMatch(role) {
   if (window.__bbOnStart) window.__bbOnStart()
 }
 function toPlay() {
+  gp(true)
   phase = 'play'; $('prep').hidden = true; $('hud').hidden = false; snapCam = true; bgm(0.17, 2.5); K.use = false; K.swap = false; K.wswap = false; K.wsel = null
   const c = S.cars.find(q => q.team === 0); if (c) aimYaw = S.teams[0].driver === 1 ? c.yaw : aimYaw
 }
 function toTitle() {
+  setPaused(false, true); gp(false); document.exitPointerLock?.()
   phase = 'title'; human = false
   S = createState(seedBase + (++matchNo) * 31, { humanTeam: -1, noCountdown: true }); stage.clearDynamic()
   $('title').hidden = false; $('result').hidden = true; $('hud').hidden = true
@@ -267,8 +278,28 @@ $('btnPost').addEventListener('click', () => {
   const txt = L(`BANG BUMPERS で${rk}位。撃破${t.kills}。2人1組で車をぶつけて撃つ12人バトル`, `Finished #${rk} in BANG BUMPERS with ${t.kills} KOs. Drive and shoot, 2 per car, 12 players.`)
   window.open('https://x.com/intent/post?text=' + encodeURIComponent(txt + '\n#BANGBUMPERS') + '&url=' + encodeURIComponent('https://tom3games.github.io/bang-bumpers/'), '_blank')
 })
+// 準備画面: 「出発」で待たずに 3・2・1 へ（Enter でも）
+function prepGo() { if (phase === 'prep' && S.phase === 'prep' && S.cd > 0.05) { S.cd = 0.05; playSnd('switch', { vol: 0.7 }) } }
+$('pGo').addEventListener('click', prepGo)
+addEventListener('keydown', e => { if (e.code === 'Enter' && phase === 'prep' && !(e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName))) prepGo() })
+// 一時停止: P・Esc・画面の右上のボタン・タブを離れた時・マウスの固定が外れた時（遊んでいる間だけ）
+let paused = false, lockedAt = 0, pausedAt = 0
+function setPaused(on, leaving = false) {
+  on = !!on && phase === 'play'
+  if (on === paused) return
+  paused = on; pausedAt = performance.now(); $('pause').hidden = !on; document.body.classList.toggle('paused', on)
+  K.keys = {}; K.fire = false; K.mouseDown = false; K.gas = K.back = K.L = K.R = K.boost = K.hb = false; K.touches.clear(); K.stick = null; $('stickBase').hidden = true
+  document.querySelectorAll('#tc .rb.on').forEach(b => b.classList.remove('on'))
+  if (on) { gp(false); engine.clear(); Snd.sleep(); document.exitPointerLock?.() } else if (!leaving) { gp(true); Snd.init(); snapCam = true; last = performance.now() }
+}
+$('bPause').addEventListener('pointerdown', e => { e.preventDefault(); setPaused(true) })
+$('pResume').addEventListener('click', () => setPaused(false))
+$('pQuit').addEventListener('click', () => toTitle())
+addEventListener('keydown', e => { if ((e.code === 'KeyP' || e.code === 'Escape') && phase === 'play' && !e.repeat) { e.preventDefault(); if (e.code === 'Escape' && paused && performance.now() - pausedAt < 500) return; setPaused(!paused) } })   // Esc でマウスの固定が外れて止めた直後の同じ Esc では戻さない
+document.addEventListener('visibilitychange', () => { if (document.hidden && phase === 'play') setPaused(true) })
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) lockedAt = performance.now(); else if (phase === 'play' && !paused && lockedAt && !shownResult) setPaused(true) })
 function showResult(rank) {
-  if (shownResult) return; shownResult = true
+  if (shownResult) return; shownResult = true; gp(false)
   const t = S.teams[0], st = t.stats
   lastKills = t.kills; $('rkN').textContent = rank; $('rkU').textContent = L('位', rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th')
   const V = (S.mode === 'points'
@@ -331,7 +362,11 @@ function onEvents() {
 }
 
 // ------------------------------------------------------------ HUD
-let boardCache = '', hintT = 0, hintShown = {}
+let boardCache = '', hintT = 0, hintShown = {}, lastHint = null
+// 遊び始めの操作の案内（PC）: 文で説明せず、押すキーを形で見せる
+const kb = (keys, ja, en) => keys.map(k => `<kbd>${k}</kbd>`).join('') + `<span>${L(ja, en)}</span>`
+const KEYS_DRIVE = [kb(['W'], '進む', 'Gas'), kb(['A', 'D'], 'ハンドル', 'Steer'), kb(['S'], 'ブレーキ・バック', 'Brake'), kb(['Shift'], 'ブースト', 'Boost'), kb(['Space'], 'ドリフト', 'Drift')].join('')
+const KEYS_SHOOT = [kb([L('マウス', 'Mouse')], 'ねらう', 'Aim'), kb([L('クリック', 'Click')], '撃つ', 'Fire'), kb(['R'], 'リロード', 'Reload'), kb(['X'], '持ち替え', 'Swap gun'), kb(['E'], 'アイテム', 'Item')].join('')
 function updateBoard() {
   const order = [...S.teams].sort((a, b) => scoreKey(S, b) - scoreKey(S, a))
   const key = S.mode + order.map(t => `${t.id}${t.stock}${t.kills}${t.out ? 1 : 0}${tname(t.id)}`).join(',')
@@ -406,7 +441,7 @@ function updateHUD(dt) {
     const ws = $('wslots'); if (ws.children.length !== 2) ws.innerHTML = '<div class="ws"><b></b><em></em><i><u></u></i></div><div class="ws"><b></b><em></em><i><u></u></i></div>'
     t.ws.forEach((w, i) => { const W = WEAPONS[w.id], el = ws.children[i], rl = w.reloadT > 0
       el.classList.toggle('on', i === t.wSel); el.classList.toggle('hot', w.overT > 0 || w.heat > 0.7); el.classList.toggle('rl', rl)
-      el.children[0].textContent = (i + 1) + ' ' + L(WEAPON_NOTE[w.id][0], W.name); el.children[1].textContent = rl ? L('装填中', 'RELOAD') : w.mag + ' / ' + W.mag
+      el.children[0].textContent = (i + 1) + ' ' + L(WEAPON_NOTE[w.id][0], WEAPON_EN[w.id]); el.children[1].textContent = rl ? L('装填中', 'RELOAD') : w.mag + ' / ' + W.mag
       el.children[2].firstElementChild.style.width = (rl ? (1 - w.reloadT / W.reload) * 100 : w.id === 'paint' ? Math.max(w.mag / W.mag * 100, w.overT > 0 ? 100 : 0) : w.mag / W.mag * 100) + '%' })
   }
   // アイテムの札: 今の役のアイテムだけ。色は役の色
@@ -419,18 +454,18 @@ function updateHUD(dt) {
   { const pt = $('partner'), drive = t.driver === 0 && !t.walking
     if (c && !t.out && !drive) { pt.hidden = false; const pslot = drive ? t.iG : t.iD
       $('ptName').textContent = drive ? L('相棒 射手', 'Partner: shooter') : L('相棒 運転', 'Partner: driver')
-      $('ptInfo').textContent = drive ? L(WEAPON_NOTE[t.ws[t.wSel].id][0], WEAPONS[t.ws[t.wSel].id].name) : L(CAR_TYPES[c.type].name, CAR_NAME_EN[c.type])
+      $('ptInfo').textContent = drive ? L(WEAPON_NOTE[t.ws[t.wSel].id][0], WEAPON_EN[t.ws[t.wSel].id]) : L(CAR_TYPES[c.type].name, CAR_NAME_EN[c.type])
       pt.classList.toggle('has', !!pslot); pt.style.setProperty('--ic', drive ? 'var(--gun)' : 'var(--drv)'); pt.style.setProperty('--pc2', drive ? 'var(--gun)' : 'var(--drv)') } else pt.hidden = true }
   // ヒント
   let hint = ''
   if (S.phase === 'play') {
     if (role === 'walk') hint = t.footDead ? L('倒された。再スタートを待て', 'Down. Wait for the restart') : L('逃げ回れ。倒されると相手に1点', 'Run! If you go down, they score')
-    else if (role === 'drive') hint = S.tMatch < 14 ? (touchy ? L('ペダルで進み、横腹にぶつけろ', 'Pedal to go, hit their sides') : L('W 進む・A D ハンドル・Space ドリフト', 'W go · A D steer · Space drift')) : (c && c.hp < 40 ? L('壊れそう。緑の箱で直せる', 'Almost dead. Find a repair box') : '')
-    else if (role === 'shoot') hint = S.tMatch < 14 ? (touchy ? L('なぞって向き、大ボタンで撃つ', 'Drag to aim, big button fires') : L(document.pointerLockElement ? 'マウスで向き・クリックで撃つ' : '画面をクリックしてマウス固定・クリックで撃つ', document.pointerLockElement ? 'Mouse to aim · click to fire' : 'Click to lock the mouse, click to fire')) : (t.ws && t.ws[t.wSel] && t.ws[t.wSel].overT > 0 ? L('熱い！冷めるまで待て', 'Overheated') : '')
+    else if (role === 'drive') hint = S.tMatch < 14 ? (touchy ? L('ペダルで進み、横腹にぶつけろ', 'Pedal to go, hit their sides') : KEYS_DRIVE) : (c && c.hp < 40 ? L('壊れそう。緑の箱で直せる', 'Almost dead. Find a repair box') : '')
+    else if (role === 'shoot') hint = S.tMatch < 14 ? (touchy ? L('なぞって向き、大ボタンで撃つ', 'Drag to aim, big button fires') : document.pointerLockElement ? KEYS_SHOOT : L('<kbd>クリック</kbd> でマウスを固定して撃つ', '<kbd>Click</kbd> to lock the mouse and fire')) : (t.ws && t.ws[t.wSel] && t.ws[t.wSel].overT > 0 ? L('熱い！冷めるまで待て', 'Overheated') : '')
   }
   { const rs = $('resp'), walking = role === 'walk' && S.phase === 'play'
     rs.hidden = !walking; if (walking) { rs.firstElementChild.textContent = t.footDead ? '×' : Math.max(1, Math.ceil(t.respT)); rs.lastElementChild.textContent = t.footDead ? L('倒された', 'DOWN') : L('秒で再スタート', 's to restart'); rs.classList.toggle('dead', !!t.footDead) } }
-  $('hint').textContent = hint
+  if (hint !== lastHint) { lastHint = hint; $('hint').innerHTML = hint; $('hint').classList.toggle('keys', hint.includes('<kbd>')) }
   if (msgT && performance.now() > msgT) { $('msg').textContent = ''; $('msg').className = ''; msgT = 0 }
 }
 
@@ -458,7 +493,7 @@ function drawWind(k, boost, on) {
 // ------------------------------------------------------------ メインループ
 function frame(now) {
   requestAnimationFrame(frame)
-  if (window.__bbPause) { last = now; return }
+  if (window.__bbPause || paused) { last = now; return }
   let dt = Math.min(0.05, (now - last) / 1000); last = now
   if (stage.hitStop > 0) { stage.hitStop -= dt; dt *= 0.15 }
   acc += dt * simSpeed

@@ -580,7 +580,7 @@ export class Stage {
       const sp = Math.hypot(c.vx, c.vz)
       if (v.mode === 'drive') { // 車の向きと進む向きの間を見る
         if (sp > 4) { const vy = Math.atan2(c.vx, c.vz); let d = vy - yaw; while (d > Math.PI) d -= 6.283; while (d < -Math.PI) d += 6.283; if (Math.abs(d) < 1.2) yaw += d * 0.35 }
-        dist = 6.0 + Math.min(3.0, sp * 0.1); h = 1.95 + Math.min(0.9, sp * 0.03); lh = 1.35; lookAhead = 11 + Math.min(10, sp * 0.4); fovT = 64 + Math.min(12, sp * 0.4) + (c.boosting ? 7 : 0)
+        dist = 4.5 + Math.min(1.8, sp * 0.06); h = 1.8 + Math.min(0.5, sp * 0.017); // 2026-11-25 本人「運転の時、もっとカメラ近づけて」6.0〜9.0→4.5〜6.3m lh = 1.35; lookAhead = 11 + Math.min(10, sp * 0.4); fovT = 64 + Math.min(12, sp * 0.4) + (c.boosting ? 7 : 0)
       } else { dist = 5.9; h = 3.0; lookAhead = 34; lh = 1.7; fovT = 66 }
     }
     if (this.cam.aspect < 1) { const pf = 1 + (1 - this.cam.aspect) * 0.22; dist *= pf; h *= pf * 0.95 }

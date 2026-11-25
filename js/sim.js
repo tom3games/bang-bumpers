@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=9'
+import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=10'
 
 export const DT = 1 / 60
 export const G = 24
@@ -25,7 +25,7 @@ export const WEAPONS = {
   spring: { name: '跳ね玉', kind: 'spring', speed: 34, dmg: 21, life: 2.8, cd: 0.5, mag: 6, reload: 2.4, bounces: 3, stat: [4, 2, 3] },
   cork: { name: '狙撃砲', kind: 'cork', speed: 95, dmg: 20, life: 1.1, cd: 0.8, mag: 5, reload: 2.6, stat: [5, 2, 5] },
 }
-export const WEAPON_IDS = ['paint', 'rocket', 'confetti', 'spring', 'cork']
+export const WEAPON_IDS = ['paint', 'rocket', 'confetti'] // 2026-11-25 本人「銃の種類多すぎ」→ 3種（跳ね玉・狙撃砲は外した。定義は残す）
 // 車（運転が1つ選ぶ）。dur は壊れにくさ（ダメージを割る）。mass は体当たりの重さ
 export const CAR_TYPES = [
   { id: 'std', name: 'セダン', note: 'どれも平均点。迷ったらこれ', muzY: 1.99, tz: -0.3, thrUp: 2.4, thrDown: 1.9, brake: 13, roll: 0.8, yawTau: 0.14, maxF: 21, acc: 8.0, dur: 1.0, mass: 1.0, steer: 1.0, grip: 9.0, boostK: 1.0, scale: 1.0, stat: [3, 3, 3, 3] },
@@ -212,7 +212,7 @@ function fire(S, t, c, inp, w, W) {
   const base = { team: t.id, x: mx, y: my, z: mz, px: mx, py: my, pz: mz, id: UID++ }
   const ric = t.ricT > 0 ? 2 : 0
   if (W.kind === 'rocket') {
-    S.bullets.push({ ...base, type: 'rocket', vx: dirx * 12 * cp, vz: dirz * 12 * cp, vy: 12 * sp_, speed: 12, yaw, life: W.life, bounces: ric ? 1 : 0 })
+    S.bullets.push({ ...base, type: 'rocket', vx: dirx * 12 * cp, vz: dirz * 12 * cp, vy: 12 * sp_, speed: 12, pr: sp_ / Math.max(0.2, cp), yaw, life: W.life, bounces: ric ? 1 : 0 })
     ev(S, { k: 'shot', w: 'rocket', team: t.id, x: mx, y: my, z: mz })
   } else if (W.kind === 'confetti') {
     for (let i = 0; i < W.n; i++) {
@@ -466,14 +466,8 @@ function updateBullets(S, dt) {
     }
     if (b.type === 'rocket') {
       b.speed = Math.min(WEAPONS.rocket.speed, b.speed + 40 * dt)
-      let best = null, bd = 1e9
-      for (const c of S.cars) {
-        if (!c.alive || c.team === b.team || c.team < 0) continue
-        const dx = c.x - b.x, dz = c.z - b.z, d = Math.hypot(dx, dz); if (d > 60) continue
-        const ang = Math.abs(angDiff(Math.atan2(dx, dz), b.yaw)); if (ang > 0.6) continue
-        if (d + ang * 15 < bd) { bd = d + ang * 15; best = c }
-      }
-      if (best) { const want = Math.atan2(best.x - b.x, best.z - b.z), dv = angDiff(want, b.yaw); b.yaw += clamp(dv, -1.7 * dt, 1.7 * dt); const dy = (best.y + 1 - b.y) / Math.max(5, Math.hypot(best.x - b.x, best.z - b.z)); b.vy += (dy * b.speed - b.vy) * Math.min(1, 3 * dt) } else b.vy *= 1 - 0.8 * dt
+      // 2026-11-25 本人「ロケット砲、追尾いらん」→ 狙った向きにまっすぐ飛ぶ（加速だけする）
+      b.vy = (b.pr || 0) * b.speed
       b.vx = Math.sin(b.yaw) * b.speed; b.vz = Math.cos(b.yaw) * b.speed
     } else if (b.type === 'confetti') { b.vy -= 6 * dt; b.vx *= 1 - 1.2 * dt; b.vz *= 1 - 1.2 * dt }
     else if (b.type === 'spring') b.vy -= 14 * dt

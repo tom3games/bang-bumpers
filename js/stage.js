@@ -1,17 +1,17 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 import * as THREE from 'three'
-import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=9'
-import * as TX from './textures.js?v=9'
-import { rbox, Baker } from './models.js?v=9'
-import { buildCar } from './cars.js?v=9'
-import { crateMeshes, decalPlace } from './crates.js?v=9'
-import { makePerson, animate as animPerson } from './people.js?v=9'
-import { Particles, Splats, Debris, Rings } from './fx.js?v=9'
+import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=10'
+import * as TX from './textures.js?v=10'
+import { rbox, Baker } from './models.js?v=10'
+import { buildCar } from './cars.js?v=10'
+import { crateMeshes, decalPlace } from './crates.js?v=10'
+import { makePerson, animate as animPerson } from './people.js?v=10'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=10'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=9'
+import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=10'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }

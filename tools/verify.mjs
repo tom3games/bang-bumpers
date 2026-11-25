@@ -27,7 +27,7 @@ async function open(q, vp = { width: 1440, height: 900 }, touch = false) {
   const p = await ctx.newPage(); p.errs = []; p.ctx = ctx
   p.on('pageerror', e => p.errs.push('pageerror ' + e.message))
   p.on('console', m => { if (m.type() === 'error' && !/GL Driver|fonts\.g|Failed to load resource/.test(m.text())) p.errs.push('console ' + m.text()) })
-  p.on('requestfailed', r => { if (!/fonts\.(googleapis|gstatic)/.test(r.url())) p.errs.push('reqfail ' + r.url()) })
+  p.on('requestfailed', r => { const ft = (r.failure() || {}).errorText || ''; if (/fonts\.(googleapis|gstatic)/.test(r.url())) return; if (/ERR_ABORTED/.test(ft) && /\.(bin|glb|gltf)$/.test(r.url())) return; p.errs.push('reqfail ' + r.url() + ' ' + ft) }) // 試験がページを閉じた時に読み込み途中の模型が中断される（ERR_ABORTED）のは不具合でないので数えない。ほかの失敗は理由つきで残す
   await p.goto(U(q + '&prep=1')); await p.waitForFunction(() => window.__bbReady, null, { timeout: 40000 })
   return p
 }
@@ -270,7 +270,7 @@ await t('大破→5秒走り回る→再スタート（画面）: 数が減る�
 await t('ポイント制のCPU戦: 180秒で終わる・結果は「点」・エラー0', async () => {
   const p = await open('auto=1&speed=12&norender=1&seed=41&start=drive&mode=points')
   await p.waitForFunction(() => window.__bbDone, null, { timeout: 150000, polling: 300 })
-  const r = await p.evaluate(() => ({ tm: Math.round(window.__bbDone.tMatch), list: document.querySelectorAll('#rkList li').length, em: document.querySelector('#rkList li em').textContent, mode: __bb.S().mode }))
+  const r = await p.evaluate(() => ({ tm: Math.round(window.__bbDone.tMatch), list: document.querySelectorAll('#rkList li').length, em: document.querySelector('#rkList li em').textContent, mode: window.__bbDone.mode })) // 終わった試合の状態で見る（__bb.S() は結果の後にタイトルの見本の試合へ入れ替わることがあり、stock に見えた）
   expect(r.mode === 'points' && r.list === 6 && /点/.test(r.em) && r.tm >= 179, JSON.stringify(r)); expect(p.errs.length === 0, p.errs.join('|')); await p.ctx.close(); return r
 })
 // ------------------------------------------------------------ CPU だけで通す（決着・エラー・音）

@@ -1,13 +1,13 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=9'
-import { cleanName, cpuNames, NAME_MAX } from './names.js?v=9'
-import { EngineMix } from './engine.js?v=9'
-import { makeInputs } from './cpu.js?v=9'
-import { Stage } from './stage.js?v=9'
-import { loadPeople } from './people.js?v=9'
-import { loadCars } from './cars.js?v=9'
-import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=9'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=10'
+import { cleanName, cpuNames, NAME_MAX } from './names.js?v=10'
+import { EngineMix } from './engine.js?v=10'
+import { makeInputs } from './cpu.js?v=10'
+import { Stage } from './stage.js?v=10'
+import { loadPeople } from './people.js?v=10'
+import { loadCars } from './cars.js?v=10'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=10'
 
 const Q = new URLSearchParams(location.search)
 const EN = Q.get('lang') === 'en'
@@ -175,7 +175,7 @@ const WEAPON_SVG = {
   spring: '<svg viewBox="0 0 96 44" fill="currentColor"><path d="M8 34h10l6-12 8 12 8-12 8 12 8-12 6 12h8" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><circle cx="78" cy="22" r="10"/></svg>',
   cork: '<svg viewBox="0 0 96 44" fill="currentColor"><rect x="6" y="17" width="60" height="12" rx="2"/><rect x="62" y="12" width="26" height="22" rx="4" opacity=".85"/><rect x="66" y="16" width="8" height="14" fill="#111" opacity=".4"/></svg>',
 }
-const WEAPON_NOTE = { paint: ['機関銃', '連射できる。撃ち続けると熱くなる', 'Rapid fire. Heats up'], rocket: ['ロケット弾', '追いかける。爆発が大きい', 'Homing. Big blast'], confetti: ['散弾', '近くで一気に広がる', 'Close-range spread'], spring: ['跳ね玉', '跳ね返って転がる重い玉', 'Bouncing slug'], cork: ['狙撃砲', '速くて遠くまで届く一発', 'Fast, long-range single shot'] }
+const WEAPON_NOTE = { paint: ['機関銃', '連射できる。撃ち続けると熱くなる', 'Rapid fire. Heats up'], rocket: ['ロケット弾', 'まっすぐ飛ぶ。爆発が大きい', 'Flies straight. Big blast'], confetti: ['散弾', '近くで一気に広がる', 'Close-range spread'], spring: ['跳ね玉', '跳ね返って転がる重い玉', 'Bouncing slug'], cork: ['狙撃砲', '速くて遠くまで届く一発', 'Fast, long-range single shot'] }
 const CAR_NOTE_EN = ['Balanced all-rounder', 'Fast and light, fragile', 'Slow but tough, hits hard']
 const CAR_NAME_EN = ['Sedan', 'Coupe', 'Pickup'] // 2026-11-25 本人「ドスンってダサい」→ 実車の形の名前に
 const bars = (labels, vals) => labels.map((lb, i) => `<span>${lb}</span><i>${[0, 1, 2, 3, 4].map(k => `<u class="${k < vals[i] ? 'on' : ''}"></u>`).join('')}</i>`).join('')
@@ -285,7 +285,7 @@ function showResult(rank) {
   $('result').hidden = false; $('hud').hidden = true; $('prep').hidden = true; $('flashfx').style.opacity = 0; phase = 'result'
   playSnd(rank <= 2 ? 'win' : 'lose', { vol: 0.9 }); Snd.duck(0.3, 3); engine.clear(); bgm(0.26)
   document.exitPointerLock?.()
-  window.__bbDone = { tMatch: S.tMatch, winner: S.winner, wrecks: S.wrecks, teams: S.teams.map(t => ({ kills: t.kills })), rank }
+  window.__bbDone = { tMatch: S.tMatch, mode: S.mode, winner: S.winner, wrecks: S.wrecks, teams: S.teams.map(t => ({ kills: t.kills })), rank }
   if (window.__bbOnResult) window.__bbOnResult(rank)
 }
 

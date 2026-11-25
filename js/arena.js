@@ -104,6 +104,7 @@ export function freeSpot(x, z, r = 3.2) {
 // 出発地点: 外側の輪に6チーム（中央を向く）
 export const TEAM_SPAWNS = Array.from({ length: NTEAM }, (_, i) => { const a = i * 2 * Math.PI / NTEAM + 0.3; const p = freeSpot(90 * Math.sin(a), 90 * Math.cos(a), 4.5); return { x: p.x, z: p.z, yaw: Math.atan2(-p.x, -p.z) } })
 const ring = (r, n, a0) => Array.from({ length: n }, (_, i) => { const a = a0 + i * 2 * Math.PI / n; return [Math.sin(a) * r, Math.cos(a) * r] })
-export const PICKUP_SPOTS = [...ring(24, 3, 0.4), ...ring(44, 5, 1.1), ...ring(72, 6, 0.2), ...ring(104, 5, 2.0)].map(([x, z]) => { const p = freeSpot(x, z, 2.4); return { x: p.x, z: p.z } })
+// 2026-11-25 本人「アイテムの出現数減らして」: 19か所→11か所
+export const PICKUP_SPOTS = [...ring(24, 2, 0.4), ...ring(44, 3, 1.1), ...ring(72, 3, 0.2), ...ring(104, 3, 2.0)].map(([x, z]) => { const p = freeSpot(x, z, 2.4); return { x: p.x, z: p.z } })
 // ステージの真ん中: たまに耐久回復の箱が出る
 export const CENTER = { x: 0, z: 0 }

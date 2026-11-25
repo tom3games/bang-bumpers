@@ -2,7 +2,7 @@
 //   { throttle, steer, boost, aim, fire, reload, use, swap, walkX, walkZ }
 // の形で渡す（運転役が throttle/steer/boost、射手役が aim/fire/reload/use、歩きは walkX/walkZ）。
 // サーバーに移す時は、この step(S, inputs, dt) をそのまま動かして、events を配るだけでよい。
-import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=14'
+import { H, WORLD, NTEAM, TEAM_SPAWNS, PICKUP_SPOTS, CENTER, pushOutCircle, solidAtPoint, lineClear, clamp, freeSpot, PILLARS, applyPillars, pillarStageOf } from './arena.js?v=15'
 
 export const DT = 1 / 60
 export const G = 24
@@ -80,10 +80,12 @@ export function createState(seed = 1, opts = {}) {
   S.pickups.push({ x: CENTER.x, z: CENTER.z, type: 'repair', t: CENTER_FIRST, id: PICKUP_SPOTS.length, center: true })
   return S
 }
-export const CENTER_FIRST = 22, CENTER_GAP = [30, 48]
+export const CENTER_FIRST = 15, CENTER_GAP = [20, 30]   // 2026-11-25 回復が真ん中だけになったので少し早く・頻繁に（22・30〜48秒→15・20〜30秒）
 const PICK_W = [['spear', 2], // 2026-11-25 本人「ターボが多すぎる。アイテムの中からターボは消して」（ITEMS の定義は残す）
-   ['oil', 2], ['mine', 2], ['repair', 3], ['grenade', 3], ['smoke', 2], ['ricochet', 2], ['turret', 2], ['flash', 2]]
-function pickType(S) { let r = S.rng() * 22, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return 'repair' }
+   ['oil', 2], ['mine', 2], ['grenade', 3], // 2026-11-25 本人「回復は真ん中だけ」: 修理箱は真ん中の箱だけ
+   ['smoke', 2], ['ricochet', 2], ['turret', 2], ['flash', 2]]
+const PICK_SUM = PICK_W.reduce((n, [, w]) => n + w, 0)
+function pickType(S) { let r = S.rng() * PICK_SUM, a = 0; for (const [k, w] of PICK_W) { a += w; if (r < a) return k } return PICK_W[PICK_W.length - 1][0] }
 export const carById = (S, id) => S.cars.find(c => c.id === id)
 export const teamCar = (S, t) => t.car >= 0 ? carById(S, t.car) : null
 export const ev = (S, o) => S.events.push(o)

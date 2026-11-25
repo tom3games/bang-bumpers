@@ -1,18 +1,18 @@
 // 画面: 廃工場のアリーナを組み、試合の状態(sim)を毎フレーム絵にする。出来事(events)から演出を出す
 const WIDE = 1.15
 import * as THREE from 'three'
-import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=14'
-import * as TX from './textures.js?v=14'
-import { rbox, Baker } from './models.js?v=14'
-import { buildCar } from './cars.js?v=14'
-import { crateMeshes, decalPlace } from './crates.js?v=14'
-import { makePerson, animate as animPerson } from './people.js?v=14'
-import { Particles, Splats, Debris, Rings } from './fx.js?v=14'
+import { WORLD, RAMPS, POLES, BOXES, H, bowlH, solidAtPoint, PILLARS, PILLAR_H } from './arena.js?v=15'
+import * as TX from './textures.js?v=15'
+import { rbox, Baker } from './models.js?v=15'
+import { buildCar } from './cars.js?v=15'
+import { crateMeshes, decalPlace } from './crates.js?v=15'
+import { makePerson, animate as animPerson } from './people.js?v=15'
+import { Particles, Splats, Debris, Rings } from './fx.js?v=15'
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
-import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=14'
+import { TEAM_COLORS, MAXF, CAR_TYPES, FLASH_R, circles, carR } from './sim.js?v=15'
 
 const lerp = (a, b, t) => a + (b - a) * t
 const lerpAng = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t }
@@ -677,6 +677,7 @@ export class Stage {
       const sp = Math.hypot(c.vx, c.vz)
       if (v.mode === 'drive') { // 車の向きと進む向きの間を見る
         if (sp > 4) { const vy = Math.atan2(c.vx, c.vz); let d = vy - yaw; while (d > Math.PI) d -= 6.283; while (d < -Math.PI) d += 6.283; if (Math.abs(d) < 1.2) yaw += d * 0.35 }
+        yaw += v.look || 0   // マウスで見回した分
         dist = 4.5 + Math.min(1.8, sp * 0.06); h = 1.8 + Math.min(0.5, sp * 0.017); // 2026-11-25 本人「運転の時、もっとカメラ近づけて」6.0〜9.0→4.5〜6.3m lh = 1.35; lookAhead = 11 + Math.min(10, sp * 0.4); fovT = 64 + Math.min(12, sp * 0.4) + (c.boosting ? 7 : 0)
       } else { dist = 5.9; h = 3.0; lookAhead = 34; lh = 1.7; fovT = 66 }
     }

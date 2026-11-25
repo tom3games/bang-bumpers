@@ -1,13 +1,13 @@
 // 入口: 画面の切り替え・入力・HUD・音・ループ。試合の中身は sim.js、CPU は cpu.js、絵は stage.js
 import * as THREE from 'three'
-import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=14'
-import { cleanName as cleanNameJa, cpuNames, NAME_MAX, FALLBACKS } from './names.js?v=14'
-import { EngineMix } from './engine.js?v=14'
-import { makeInputs } from './cpu.js?v=14'
-import { Stage } from './stage.js?v=14'
-import { loadPeople } from './people.js?v=14'
-import { loadCars } from './cars.js?v=14'
-import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=14'
+import { createState, step, DT, TEAM_NAMES, TEAM_COLORS, WEAPONS, WEAPON_IDS, CAR_TYPES, ITEMS, MATCH_SEC, ITEM_NAMES, assistAim, angDiff, setLoadout, STOCK, MAXF, scoreKey, RESPAWN_SEC } from './sim.js?v=15'
+import { cleanName as cleanNameJa, cpuNames, NAME_MAX, FALLBACKS } from './names.js?v=15'
+import { EngineMix } from './engine.js?v=15'
+import { makeInputs } from './cpu.js?v=15'
+import { Stage } from './stage.js?v=15'
+import { loadPeople } from './people.js?v=15'
+import { loadCars } from './cars.js?v=15'
+import { H, WORLD, BOXES, POLES, RAMPS, NTEAM } from './arena.js?v=15'
 
 const Q = new URLSearchParams(location.search)
 // 言語: ?lang= があればそれ。無ければ公開版は日本語、CrazyGames 版（__bbDefaultEN）は SDK の言語が ja の時だけ日本語・ほかは英語
@@ -83,7 +83,10 @@ addEventListener('mouseup', e => { if (e.button === 0) K.mouseDown = false })
 addEventListener('mousemove', e => {
   K.mx = e.clientX / innerWidth * 2 - 1
   if (document.pointerLockElement) aimYaw -= e.movementX * 0.0026
+  // 2026-11-25 本人「bangもマウスで視点移動できるように」: 運転中はマウスで車のまわりを見回す。手を止めると後ろへ戻る
+  if (document.pointerLockElement && curRole() === 'drive') { lookOff = Math.max(-2.8, Math.min(2.8, lookOff - e.movementX * 0.0035)); lookAt = performance.now() }
 })
+let lookOff = 0, lookAt = 0
 const holdBtn = (id, key, toggle) => {
   const b = $(id)
   const down = e => { e.preventDefault(); Snd.init(); b.setPointerCapture?.(e.pointerId); if (toggle) { K[key] = !K[key]; b.classList.toggle('rev', K[key]) } else { K[key] = true; b.classList.add('on') } }
@@ -365,7 +368,7 @@ function onEvents() {
 let boardCache = '', hintT = 0, hintShown = {}, lastHint = null
 // 遊び始めの操作の案内（PC）: 文で説明せず、押すキーを形で見せる
 const kb = (keys, ja, en) => keys.map(k => `<kbd>${k}</kbd>`).join('') + `<span>${L(ja, en)}</span>`
-const KEYS_DRIVE = [kb(['W'], '進む', 'Gas'), kb(['A', 'D'], 'ハンドル', 'Steer'), kb(['S'], 'ブレーキ・バック', 'Brake'), kb(['Shift'], 'ブースト', 'Boost'), kb(['Space'], 'ドリフト', 'Drift')].join('')
+const KEYS_DRIVE = [kb([L('マウス', 'Mouse')], '見回す', 'Look'), kb(['W'], '進む', 'Gas'), kb(['A', 'D'], 'ハンドル', 'Steer'), kb(['S'], 'ブレーキ・バック', 'Brake'), kb(['Shift'], 'ブースト', 'Boost'), kb(['Space'], 'ドリフト', 'Drift')].join('')
 const KEYS_SHOOT = [kb([L('マウス', 'Mouse')], 'ねらう', 'Aim'), kb([L('クリック', 'Click')], '撃つ', 'Fire'), kb(['R'], 'リロード', 'Reload'), kb(['X'], '持ち替え', 'Swap gun'), kb(['E'], 'アイテム', 'Item')].join('')
 function updateBoard() {
   const order = [...S.teams].sort((a, b) => scoreKey(S, b) - scoreKey(S, a))
@@ -513,7 +516,10 @@ function frame(now) {
   else if (phase === 'prep') cv = { mode: 'prep', car: S.cars.find(q => q.team === 0) }
   else if (role === 'walk') cv = { mode: 'walk', yaw: aimYaw, person: t.p[0].state === 'ride' ? t.p[1] : t.p[0], snap: snapCam }
   else if (role === 'shoot') cv = { mode: 'gun', yaw: aimYaw, car: S.cars.find(q => q.id === t.car), snap: snapCam }
-  else if (role === 'drive') cv = { mode: 'drive', car: S.cars.find(q => q.id === t.car), snap: snapCam }
+  else if (role === 'drive') {
+    if (performance.now() - lookAt > 700) lookOff *= Math.exp(-3.5 * dt)
+    cv = { mode: 'drive', car: S.cars.find(q => q.id === t.car), snap: snapCam, look: lookOff }
+  }
   else cv = { mode: 'orbit' }
   if (cv.mode !== 'orbit' && !(cv.car || cv.person)) cv = { mode: 'orbit' }
   if (cv.mode === 'prep' && !cv.car) cv = { mode: 'orbit' }

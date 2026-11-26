@@ -58,6 +58,9 @@ let phase = 'title', human = false, matchNo = 0
 let gameMode = Q.get('mode') === 'points' ? 'points' : Q.get('mode') === 'stock' ? 'stock' : 'stock'
 try { if (!Q.get('mode')) { const m = localStorage.getItem('bb_mode'); if (m === 'points' || m === 'stock') gameMode = m } } catch (e) {}
 let acc = 0, last = performance.now(), simSpeed = Math.max(1, Math.min(12, +(Q.get('speed') || 1)))
+// 2026-11-26 本人「撃つ角度、上下ちょっと調整できるように」: 射手の照準の上下（ラジアン。下 -0.12〜上 0.22）
+let aimPitch = 0
+const nudgePitch = d => { aimPitch = Math.max(-0.12, Math.min(0.22, aimPitch + d)) }
 let aimYaw = 0, snapCam = true, resultAt = 0, shownResult = false, matchStart = 0, msgT = 0
 const K = { keys: {}, gas: false, back: false, L: false, R: false, boost: false, hb: false, fire: false, reload: false, use: false, swap: false, wswap: false, mx: 0, mouseDown: false, stick: null, touches: new Map(), autoCPU: Q.get('auto') === '1' }
 const wasPressed = {}
@@ -86,6 +89,7 @@ addEventListener('mouseup', e => { if (e.button === 0) K.mouseDown = false })
 addEventListener('mousemove', e => {
   K.mx = e.clientX / innerWidth * 2 - 1
   if (document.pointerLockElement) aimYaw -= e.movementX * 0.0026
+  if (document.pointerLockElement && curRole() === 'shoot') nudgePitch(-e.movementY * 0.0016)
   // 2026-11-25 本人「bangもマウスで視点移動できるように」: 運転中はマウスで車のまわりを見回す。手を止めると後ろへ戻る
   if (document.pointerLockElement && curRole() === 'drive') { lookOff = Math.max(-2.8, Math.min(2.8, lookOff - e.movementX * 0.0035)); lookAt = performance.now() }
 })
@@ -115,12 +119,12 @@ addEventListener('pointerdown', e => {
   if (mode === 'drive') return
   const left = e.clientX < innerWidth * 0.5
   if (mode === 'walk' && left) { K.touches.set(e.pointerId, { kind: 'stick', x0: e.clientX, y0: e.clientY }); const sb = $('stickBase'); sb.hidden = false; sb.style.left = e.clientX + 'px'; sb.style.top = e.clientY + 'px'; sb.firstElementChild.style.transform = '' }
-  else K.touches.set(e.pointerId, { kind: 'aim', x: e.clientX })
+  else K.touches.set(e.pointerId, { kind: 'aim', x: e.clientX, y: e.clientY })
   Snd.init()
 })
 addEventListener('pointermove', e => {
   const t = K.touches.get(e.pointerId); if (!t) return
-  if (t.kind === 'aim') { aimYaw -= (e.clientX - t.x) * 0.0062; t.x = e.clientX }
+  if (t.kind === 'aim') { aimYaw -= (e.clientX - t.x) * 0.0062; t.x = e.clientX; if (curRole() === 'shoot') nudgePitch(-(e.clientY - t.y) * 0.003); t.y = e.clientY }
   else { let dx = e.clientX - t.x0, dy = e.clientY - t.y0; const l = Math.hypot(dx, dy), m = 46; if (l > m) { dx *= m / l; dy *= m / l } K.stick = { x: dx / m, y: dy / m }; $('stickBase').firstElementChild.style.transform = `translate(${dx}px,${dy}px)` }
 })
 const endTouch = e => { const t = K.touches.get(e.pointerId); if (!t) return; K.touches.delete(e.pointerId); if (t.kind === 'stick') { K.stick = null; $('stickBase').hidden = true } }
@@ -145,7 +149,7 @@ function readHuman(dt) {
     out.drive.boost = !!(k.boost || K.boost); out.drive.hb = !!(k.fire || K.hb)
   } else if (role === 'shoot' || role === 'walk') {
     // 向き: キーで回す・マウスの位置で回す（固定していない時）
-    if (role === 'shoot') aimYaw += ((k.left ? 1 : 0) - (k.right ? 1 : 0)) * 2.4 * dt
+    if (role === 'shoot') { aimYaw += ((k.left ? 1 : 0) - (k.right ? 1 : 0)) * 2.4 * dt; nudgePitch(((k.gas ? 1 : 0) - (k.brake ? 1 : 0)) * 0.45 * dt) }
     if (!document.pointerLockElement && !touchy && K.mx !== 0 && role === 'shoot' && K.mouseDown === false && Math.abs(K.mx) > 0.35 && Q.get('edge') === '1') aimYaw -= Math.sign(K.mx) * (Math.abs(K.mx) - 0.35) * 2.4 * dt
   }
   if (role === 'shoot' && c) {
@@ -247,7 +251,7 @@ function startMatch(role) {
   S.teams[0].driver = role === 'drive' ? 0 : 1
   TN = [$('pName').value.trim() ? cleanName($('pName').value, 0) : L('あなた', 'You'), ...cpuNames(S.rng, NTEAM - 1)]
   stage.clearDynamic(); human = true
-  const c = S.cars.find(q => q.team === 0); aimYaw = c.yaw; snapCam = true
+  const c = S.cars.find(q => q.team === 0); aimYaw = c.yaw; aimPitch = 0; snapCam = true
   phase = 'prep'; shownResult = false; resultAt = 0; setPaused(false, true); gp(false)
   $('title').hidden = true; $('result').hidden = true; $('hud').hidden = true; $('prep').hidden = false
   boardCache = ''; $('feed').innerHTML = ''; $('msg').textContent = ''
@@ -360,7 +364,7 @@ function onEvents() {
       case 'repair': if (e.team === 0) say(L('修理', 'REPAIR'), true, 900); break
       case 'flash': { const mc = myTeam() && myTeam().car >= 0 ? S.cars.find(q => q.id === myTeam().car) : null; if (mc && mc.flashT > 0.3) { Snd.muffle(Math.min(2.2, mc.flashT * 0.8)); playSnd('bell', { vol: 0.16, rate: 3.2 }) } break }
       case 'overheat': if (e.team === 0) say(L('熱い！', 'OVERHEAT'), true, 900); break
-      case 'respawn': if (e.team === 0) { say(L('再スタート', 'BACK IN'), true, 1000); const c = S.cars.find(q => q.id === e.id); if (c) { aimYaw = c.yaw; snapCam = true; K.use = false } } break
+      case 'respawn': if (e.team === 0) { say(L('再スタート', 'BACK IN'), true, 1000); const c = S.cars.find(q => q.id === e.id); if (c) { aimYaw = c.yaw; aimPitch = 0; snapCam = true; K.use = false } } break
       case 'centerRepair': feed(L('真ん中に修理箱が出た', 'A repair box appeared in the center'), 0x43d17a); playSnd('bell', { vol: 0.3, rate: 1.6 }); break
     }
   }
@@ -518,7 +522,7 @@ function frame(now) {
   if (phase === 'title' || !t) cv = { mode: 'orbit' }
   else if (phase === 'prep') cv = { mode: 'prep', car: S.cars.find(q => q.team === 0) }
   else if (role === 'walk') cv = { mode: 'walk', yaw: aimYaw, person: t.p[0].state === 'ride' ? t.p[1] : t.p[0], snap: snapCam }
-  else if (role === 'shoot') cv = { mode: 'gun', yaw: aimYaw, car: S.cars.find(q => q.id === t.car), snap: snapCam }
+  else if (role === 'shoot') cv = { mode: 'gun', yaw: aimYaw, pitch: aimPitch, car: S.cars.find(q => q.id === t.car), snap: snapCam }
   else if (role === 'drive') {
     if (performance.now() - lookAt > 700) lookOff *= Math.exp(-3.5 * dt)
     cv = { mode: 'drive', car: S.cars.find(q => q.id === t.car), snap: snapCam, look: lookOff }

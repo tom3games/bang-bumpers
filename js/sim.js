@@ -288,7 +288,8 @@ function stepBody(S, c, dt, inp, boosting) {
     sp = c.vx * fx + c.vz * fz
     let lat = c.vx * rx + c.vz * rz
     // 踏み込みと離しにも慣性
-    const k = thrIn > c.thr ? T.thrUp : T.thrDown
+    // 2026-11-26 本人「アクセル離してるのに、しばらくスピードも落ちずに前に進む」: 離した時は踏む力がすぐ抜ける（前は0.5〜0.8秒かけて抜け、その間も加速していた）
+    const k = thrIn > c.thr ? T.thrUp : Math.max(T.thrDown, 9)
     c.thr += clamp(thrIn - c.thr, -k * dt, k * dt)
     const brkIn = thrIn < -0.02 ? 1 : 0
     c.brk += clamp(brkIn - c.brk, -8 * dt, 6 * dt)
@@ -300,7 +301,8 @@ function stepBody(S, c, dt, inp, boosting) {
       } else if (c.brk > 0.05) {
         if (sp > 0.6) ax = -T.brake * c.brk; else ax = -10 * c.brk * (sp > -MAXR ? 1 : 0)
       } else {
-        const drag = (inp ? T.roll * 1.45 : 6) + 0.0036 * sp * sp   // 離すと転がる。重い車ほど長く転がる
+        // 離した時: エンジンブレーキ（速いほど強い）＋転がり抵抗＋空気抵抗。前は半分の速さまで5〜7秒・止まるまで約120m転がっていた
+        const drag = (inp ? 2.2 + T.roll * 1.5 + 0.14 * Math.abs(sp) : 6) + 0.003 * sp * sp
         ax = -Math.sign(sp) * Math.min(Math.abs(sp) / Math.max(dt, 1e-3), drag)
       }
       if (sp > vmax && ax < -5) ax = -5   // ブーストが切れた後は、ゆるやかに通常の最高速へ

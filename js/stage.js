@@ -716,6 +716,7 @@ export class Stage {
     { const [cx, cy2, cz] = camAt(d); tp.set(cx, cy2, cz) }
     tp.y = Math.max(tp.y, H(tp.x, tp.z) + 1.0)
     look.set(fx + sy * lookAhead, fy + lh, fz + cy * lookAhead)
+    if (v.mode === 'gun' && v.pitch) look.y += Math.tan(v.pitch) * lookAhead   // 射手の照準の上下
     if (v.snap) { this.camPos.copy(tp); this.camLook.copy(look) }
     else { const spN = v.car ? Math.hypot(v.car.vx, v.car.vz) / ((CAR_TYPES[v.car.type] || CAR_TYPES[0]).maxF) : 0; const kp = 1 - Math.exp(-(v.mode === 'gun' ? 14 : Math.max(4.2, 9 - spN * 4.2)) * dt); this.camPos.lerp(tp, kp); this.camLook.lerp(look, 1 - Math.exp(-12 * dt)) }
     cam.position.copy(this.camPos)

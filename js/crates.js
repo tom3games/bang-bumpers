@@ -1,6 +1,6 @@
 // 拾い物は地面に置かれた実物の箱: 運転側=工具箱（橙の帯）・射手側=弾薬箱（青の帯）・修理=救急箱（緑の帯）。役は帯の色と、箱に刷った小さな記号で分かる
 import * as THREE from 'three'
-import { Baker, rbox } from './models.js?v=16'
+import { Baker, rbox } from './models.js?v=18'
 
 export const ROLE_COLOR = { driver: 0xd98a3a, gunner: 0x3a9fbe, repair: 0x3c9a63 }
 // 箱ごとの大きさ（幅・高さ・奥行）と、記号を貼る位置

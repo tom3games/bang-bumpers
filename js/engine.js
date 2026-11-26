@@ -1,5 +1,5 @@
 // エンジン音: 録音のループ3本（アイドル・中速・高速）を回転数で重ねて混ぜる。自分の車は大きく、ほかは近い数台だけ距離と左右で鳴らす
-import { CAR_TYPES } from './sim.js?v=16'
+import { CAR_TYPES } from './sim.js?v=18'
 const URLS = ['snd/eng_idle.wav', 'snd/eng_mid.wav', 'snd/eng_high.wav']
 export const ENGINE_URLS = URLS
 const TYPE_PITCH = [1.0, 1.14, 0.78, 1.04]       // 車の種類ごとの音の太さ（重い車は低く太く）

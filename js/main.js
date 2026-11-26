@@ -79,6 +79,8 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { const m = KEYMAP[e.code]; if (m) K.keys[m] = false })
 addEventListener('blur', () => { K.keys = {}; K.fire = false; K.mouseDown = false })
 const view = $('view')
+// 2026-11-26 本人「左クリックでアイテム使うように」: 運転中（と歩き）は左クリックでアイテム。射手の左クリックは撃つのまま
+view.addEventListener('mousedown', e => { if (e.button === 0 && phase === 'play' && (curRole() === 'drive' || curRole() === 'walk')) K.use = true })
 view.addEventListener('mousedown', e => { if (e.button === 0) { K.mouseDown = true; Snd.init(); if (phase === 'title') bgm(0.26); if (phase === 'play' && !document.pointerLockElement && !touchy && view.requestPointerLock) { try { const pr = view.requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}) } catch (er) {} } } })
 addEventListener('mouseup', e => { if (e.button === 0) K.mouseDown = false })
 addEventListener('mousemove', e => {
@@ -369,7 +371,7 @@ function onEvents() {
 let boardCache = '', hintT = 0, hintShown = {}, lastHint = null
 // 遊び始めの操作の案内（PC）: 文で説明せず、押すキーを形で見せる
 const kb = (keys, ja, en) => keys.map(k => `<kbd>${k}</kbd>`).join('') + `<span>${L(ja, en)}</span>`
-const KEYS_DRIVE = [kb([L('マウス', 'Mouse')], '見回す', 'Look'), kb(['W'], '進む', 'Gas'), kb(['A', 'D'], 'ハンドル', 'Steer'), kb(['S'], 'ブレーキ・バック', 'Brake'), kb(['Shift'], 'ブースト', 'Boost'), kb(['Space'], 'ドリフト', 'Drift')].join('')
+const KEYS_DRIVE = [kb([L('マウス', 'Mouse')], '見回す', 'Look'), kb(['W'], '進む', 'Gas'), kb(['A', 'D'], 'ハンドル', 'Steer'), kb(['S'], 'ブレーキ・バック', 'Brake'), kb(['Shift'], 'ブースト', 'Boost'), kb(['Space'], 'ドリフト', 'Drift'), kb([L('クリック', 'Click')], 'アイテム', 'Item')].join('')
 const KEYS_SHOOT = [kb([L('マウス', 'Mouse')], 'ねらう', 'Aim'), kb([L('クリック', 'Click')], '撃つ', 'Fire'), kb(['R'], 'リロード', 'Reload'), kb(['X'], '持ち替え', 'Swap gun'), kb(['E'], 'アイテム', 'Item')].join('')
 function updateBoard() {
   const order = [...S.teams].sort((a, b) => scoreKey(S, b) - scoreKey(S, a))
